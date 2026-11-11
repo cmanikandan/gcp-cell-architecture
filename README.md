@@ -4,11 +4,13 @@
 
 Deployable reference architecture, local chaos-testing suite, and diagrams for **isolating multi-tenant workloads on Google Cloud using cell-based architecture and shuffle sharding**.
 
+> **Proof-of-concept (POC) & billing notice:** This repository is an educational **proof of concept (POC)**, not a turn-key production deployment. Running the local demo (`--local-only`) is **100% free**, whereas deploying the Terraform stack to Google Cloud (`--deploy-gcp`) provisions real cloud resources and **will incur Google Cloud billing charges**. Prices, free-tier quotas, and service features change over time—always refer to the [official Google Cloud documentation](https://docs.cloud.google.com/) and the [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator) for the latest information before deploying.
+
 ![Cell-based reference architecture on Google Cloud](diagrams/01_cell_reference_architecture.png)
 
 ## What you will find in this repo
 
-Instead of running every customer inside one shared cluster and database—where a single noisy neighbor or bad config push can cause a 100% outage—this project shows how to:
+Instead of running every customer inside one shared cluster and database—where a single noisy neighbor or bad config push can cause a 100% outage—this POC shows how to:
 
 1. **Divide your stack into independent cells** (`1 Google Cloud project = 1 cell`) across **Cloud Run**, **Google Kubernetes Engine (GKE)**, **Spanner**, and **Cloud WAN** (`STAR` spoke isolation).
 2. **Contain "poison-pill" customers below a 2% blast radius** using stateless **shuffle sharding** (`Service Extensions` Proxy-Wasm on **Cloud Load Balancing**).
@@ -16,15 +18,14 @@ Instead of running every customer inside one shared cluster and database—where
 
 ---
 
-## Quickstart: run the 60-second local demo (no cloud account required)
+## Quickstart: run the 60-second local demo (\$0 cloud cost)
 
-You can test cell isolation and shuffle-sharding failover right on your laptop using Python 3.10+. The test runner spins up 8 isolated cell HTTP servers, starts a local shuffle-sharding load balancer, crashes **Tenant X**'s assigned cells, and verifies that **Alice** and **98%+ of 1,000 customers** stay online:
+You can test cell isolation and shuffle-sharding failover right on your laptop using Python 3.10+ with **zero cloud cost**. The test runner spins up 8 isolated cell HTTP servers, starts a local shuffle-sharding load balancer, crashes **Tenant X**'s assigned cells, and verifies that **Alice** and **98%+ of 1,000 customers** stay online:
 
 ```bash
 git clone https://github.com/cmanikandan/gcp-cell-architecture.git
 cd gcp-cell-architecture
 
-chmod +x tests/deploy_and_test.sh clouddeploy/verify-cell-slo.sh
 ./tests/deploy_and_test.sh --local-only
 ```
 
@@ -38,15 +39,30 @@ python3 tests/walkthrough_demo.py
 
 ---
 
-## Deploy to Google Cloud
+## Deploy the POC to Google Cloud
+
+### Approximate POC cost estimate
+
+By default, `terraform/variables.tf` uses POC-friendly sizing (`100` Spanner processing units on `STANDARD` edition per cell, scale-to-zero Cloud Run with `min_instance_count = 0`, and Cloud Armor Standard). Approximate US list-price estimates (`us-central1` / `us-east4`) for all **8 cells**:
+
+| Google Cloud service | POC configuration (8 cells) | Approx. hourly rate | Approx. 2-hour POC test | Approx. 24/7 monthly rate | Official pricing docs |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **Spanner** | `8` regional `STANDARD` instances × `100` PU (1-hr minimum) | ~\$0.76/hr | ~\$1.52 | ~\$555/mo | [Spanner pricing](https://cloud.google.com/spanner/pricing) |
+| **Cloud WAN (NCC)** | `8` VPC spokes on `STAR` hub (+ data transfer) | ~\$0.80/hr | ~\$1.60 | ~\$584/mo | [Network Connectivity pricing](https://cloud.google.com/network-connectivity/pricing) |
+| **Cloud Load Balancing & Service Extensions** | `1` global forwarding rule + Proxy-Wasm plugin | ~\$0.025/hr | ~\$0.05 | ~\$18/mo | [Load Balancing pricing](https://cloud.google.com/load-balancing/pricing) |
+| **Cloud Armor Standard** | `1` security policy + `2` rules (prorated) | ~\$0.01/hr | <\$0.05 | ~\$7/mo | [Cloud Armor pricing](https://cloud.google.com/armor/pricing) |
+| **Cloud Run, Cloud Deploy, Cloud Build & App Hub** | Scale-to-zero (`min_instances = 0`), 1st pipeline, App Hub | ~\$0.00/hr idle | <\$0.25 | Usage-based | [Pricing Calculator](https://cloud.google.com/products/calculator) |
+| **Estimated POC total** | **Full 8-cell POC stack** | **~\$1.60/hr** | **~\$3–\$5 total** | **~\$1,165/mo** | *Destroy after testing!* |
+
+*Estimates exclude network egress/inter-region data transfer and free-tier credits, and may vary by region or currency. Always check the official Google Cloud pricing documentation linked above for current rates.*
 
 ### Prerequisites
 
-* [Google Cloud SDK (`gcloud`)](https://cloud.google.com/sdk/docs/install) authenticated to a sandbox organization/project
+* [Google Cloud SDK (`gcloud`)](https://docs.cloud.google.com/sdk/docs/install) authenticated to a sandbox organization/project with billing enabled
 * [Terraform](https://developer.hashicorp.com/terraform/downloads) `>= 1.6`
 * [Rust toolchain](https://rustup.rs/) with target `wasm32-wasip1` (`rustup target add wasm32-wasip1`) for compiling the Proxy-Wasm router
 
-### One-command build & deploy
+### One-command POC build & deploy
 
 ```bash
 export PLATFORM_PROJECT_ID="your-platform-host-project"
@@ -56,6 +72,18 @@ export PRIMARY_REGION="us-central1"
 ```
 
 To switch between a **global Anycast external Application Load Balancer** (default) and **sovereign regional external Application Load Balancers** (for strict data residency), set `ingress_mode = "regional"` in `terraform/variables.tf` or pass `-var="ingress_mode=regional"`.
+
+### Uninstall & tear down Google Cloud resources
+
+To avoid ongoing hourly Spanner and Cloud WAN spoke charges (~`\$1.60/hr`), tear down the POC as soon as you finish testing. The uninstall script removes active Cloud Deploy releases, runs `terraform destroy` across all cells, and deletes POC container images from Artifact Registry:
+
+```bash
+export PLATFORM_PROJECT_ID="your-platform-host-project"
+export PRIMARY_REGION="us-central1"
+
+./tests/uninstall_gcp.sh
+# Or non-interactively: ./tests/uninstall_gcp.sh --yes
+```
 
 ![Global vs regional external Application Load Balancers](diagrams/03_global_vs_regional_alb_ingress.png)
 
@@ -69,7 +97,7 @@ To switch between a **global Anycast external Application Load Balancer** (defau
 ├── cell-service/             # Cell HTTP backend (Spanner client, Dockerfile, GKE NEG manifest)
 ├── terraform/                # ALB, Cloud WAN (NCC STAR), Cloud Run/GKE, Spanner, Cloud Deploy, App Hub
 ├── clouddeploy/              # Skaffold profiles & post-deploy SLO verification gate script
-├── tests/                    # Step-by-step failover demo & 1,000-tenant live HTTP chaos benchmark
+├── tests/                    # Local failover demo, 1,000-tenant chaos test, deploy & uninstall scripts
 ├── diagrams/                 # Google Cloud Architecture Center style PNG diagrams & generator
 ├── DISCUSS_GOOGLE_DEV_POST.md# Companion technical blog article for discuss.google.dev
 ├── AGENTS.md                 # Instructions and architectural invariants for AI coding agents

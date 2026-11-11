@@ -59,9 +59,37 @@ variable "wasm_plugin_image_uri" {
 }
 
 variable "spanner_processing_units" {
-  description = "Dedicated Spanner processing units per isolated cell instance (min 100 PU)."
+  description = "Dedicated Spanner processing units per isolated cell instance (min 100 PU for POC; scale up for production)."
   type        = number
-  default     = 300
+  default     = 100
+}
+
+variable "spanner_edition" {
+  description = "Spanner edition per cell ('STANDARD' for lowest POC cost, or 'ENTERPRISE' / 'ENTERPRISE_PLUS' for production)."
+  type        = string
+  default     = "STANDARD"
+  validation {
+    condition     = contains(["STANDARD", "ENTERPRISE", "ENTERPRISE_PLUS"], var.spanner_edition)
+    error_message = "spanner_edition must be STANDARD, ENTERPRISE, or ENTERPRISE_PLUS."
+  }
+}
+
+variable "cloud_run_min_instances" {
+  description = "Minimum warm Cloud Run instances per cell (0 for scale-to-zero POC cost savings; 2+ recommended in production)."
+  type        = number
+  default     = 0
+}
+
+variable "enable_deletion_protection" {
+  description = "Protect cell Spanner databases against accidental deletion (false for easy POC teardown; set true in production)."
+  type        = bool
+  default     = false
+}
+
+variable "enable_adaptive_protection" {
+  description = "Enable Cloud Armor L7 Adaptive Protection (false keeps POC on Cloud Armor Standard pay-as-you-go tier)."
+  type        = bool
+  default     = false
 }
 
 locals {

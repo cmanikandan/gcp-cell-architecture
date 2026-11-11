@@ -28,7 +28,7 @@ resource "google_spanner_instance" "cell_db" {
   config           = "regional-${each.value.region}"
   display_name     = "Isolated Spanner (${each.key})"
   processing_units = var.spanner_processing_units
-  edition          = "ENTERPRISE"
+  edition          = var.spanner_edition
 
   labels = {
     cell_id = each.key
@@ -62,7 +62,7 @@ resource "google_spanner_database" "cell_ledger" {
     EOT
   ]
 
-  deletion_protection = true
+  deletion_protection = var.enable_deletion_protection
 }
 
 resource "google_service_account" "cell_workload_sa" {
@@ -93,7 +93,7 @@ resource "google_cloud_run_v2_service" "cell_api" {
     service_account = google_service_account.cell_workload_sa[each.key].email
 
     scaling {
-      min_instance_count = 2
+      min_instance_count = var.cloud_run_min_instances
       max_instance_count = 50
     }
 

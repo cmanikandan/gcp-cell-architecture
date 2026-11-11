@@ -3,10 +3,16 @@
 # Usage:
 #   ./tests/deploy_and_test.sh --local-only
 #   PLATFORM_PROJECT_ID=my-platform-proj ./tests/deploy_and_test.sh --deploy-gcp
+#   PLATFORM_PROJECT_ID=my-platform-proj ./tests/deploy_and_test.sh --destroy-gcp
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:---local-only}"
+
+if [[ "${MODE}" == "--destroy-gcp" ]]; then
+  shift || true
+  exec "${ROOT_DIR}/tests/uninstall_gcp.sh" "$@"
+fi
 
 if [[ "${MODE}" == "--local-only" ]]; then
   echo "==> [Part 1] Step-by-step customer failover walkthrough (Alice vs. Tenant X)..."

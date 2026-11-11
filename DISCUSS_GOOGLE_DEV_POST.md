@@ -182,15 +182,16 @@ resource "google_clouddeploy_delivery_pipeline" "cellular_pipeline" {
 ```
 [/details]
 
-### Step 5: test the architecture locally in 60 seconds
+### Step 5: test the proof of concept locally or on Google Cloud
 
-You don't even need a live cloud environment to see shuffle sharding in action. Clone the [cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture) repository on GitHub—its local test harness (`deploy_and_test.sh`) spins up 8 mini cell servers on your laptop, runs a local shuffle-sharding load balancer, crashes **Tenant X**'s cells, and proves that **Alice** and **98%+ of 1,000 simulated customers** stay online:
+> **Proof-of-concept (POC) & billing notice:** The companion repository ([cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture)) is an educational **proof of concept (POC)** intended for learning and architectural evaluation—not a turn-key production deployment. Running the local simulation (`--local-only`) is **100% free (\$0)**, whereas deploying to Google Cloud (`--deploy-gcp`) creates live resources and **will incur cloud billing charges**. Because cloud pricing, free-tier quotas, and service features change over time, always refer to the [official Google Cloud documentation](https://docs.cloud.google.com/) and the [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator) for the latest information before deploying.
+
+You don't need a live cloud account to see shuffle sharding in action. Clone the [cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture) repository on GitHub—its local test harness (`deploy_and_test.sh --local-only`) spins up 8 mini cell servers on your laptop at **\$0 cost**, runs a local shuffle-sharding load balancer, crashes **Tenant X**'s cells, and proves that **Alice** and **98%+ of 1,000 simulated customers** stay online:
 
 ```bash
 git clone https://github.com/cmanikandan/gcp-cell-architecture.git
 cd gcp-cell-architecture
 
-chmod +x tests/deploy_and_test.sh clouddeploy/verify-cell-slo.sh
 ./tests/deploy_and_test.sh --local-only
 ```
 
@@ -219,6 +220,34 @@ Step 4/4: Sending alice-3's next request through the load balancer...
 [Shuffle Sharding      (N=12, k=2)] -> Surviving: 988/1000 (1.20% outage  — <2% goal met!)
 ```
 
+#### Approximate cost of running the POC on Google Cloud
+
+If you choose to deploy the full 8-cell POC into a Google Cloud sandbox (`us-central1` / `us-east4`), the Terraform variables default to minimal POC sizing (`100` Spanner processing units on `STANDARD` edition per cell and scale-to-zero Cloud Run with `min_instance_count = 0`). Expect **~\$3 to \$5 USD total for a 2-hour hands-on test session**—or **~\$1.60/hour (~\$1,165/month)** if you forget to tear it down:
+
+| Google Cloud service | 8-cell POC configuration | Approx. hourly rate | 2-hour POC test | 24/7 monthly rate | Official pricing reference |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **Spanner** | `8` regional `STANDARD` instances × `100` PU (1-hr minimum) | ~\$0.76/hr | ~\$1.52 | ~\$555/mo | [Spanner pricing](https://cloud.google.com/spanner/pricing) |
+| **Cloud WAN (NCC)** | `8` VPC spokes on `STAR` hub (+ data transfer) | ~\$0.80/hr | ~\$1.60 | ~\$584/mo | [Network Connectivity pricing](https://cloud.google.com/network-connectivity/pricing) |
+| **Cloud Load Balancing & Service Extensions** | `1` global forwarding rule + Proxy-Wasm plugin | ~\$0.025/hr | ~\$0.05 | ~\$18/mo | [Cloud Load Balancing pricing](https://cloud.google.com/load-balancing/pricing) |
+| **Cloud Armor Standard** | `1` security policy + `2` rules (prorated) | ~\$0.01/hr | <\$0.05 | ~\$7/mo | [Cloud Armor pricing](https://cloud.google.com/armor/pricing) |
+| **Cloud Run, Cloud Deploy, Cloud Build & App Hub** | Scale-to-zero (`min_instances = 0`), 1st pipeline, App Hub | ~\$0.00/hr idle | <\$0.25 | Usage-based | [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator) |
+| **Estimated POC total** | **Full 8-cell sandbox deployment** | **~\$1.60/hr** | **~\$3–\$5 total** | **~\$1,165/mo** | *Tear down right after testing!* |
+
+*Note: All figures above are approximate US list-price estimates excluding network egress and free-tier credits. Always verify current rates in the official Google Cloud pricing pages linked above.*
+
+To deploy the POC into your sandbox project—and **cleanly uninstall every resource afterward** using `uninstall_gcp.sh` so billing stops immediately:
+
+```bash
+export PLATFORM_PROJECT_ID="your-platform-host-project"
+export PRIMARY_REGION="us-central1"
+
+# 1. Deploy and test the 8-cell POC on Google Cloud
+./tests/deploy_and_test.sh --deploy-gcp
+
+# 2. Tear down all cloud resources & container images when finished (~$0 ongoing cost)
+./tests/uninstall_gcp.sh
+```
+
 ---
 
 ## Real-world application: protecting a multi-tenant SaaS platform on a busy Tuesday
@@ -242,15 +271,16 @@ By combining a few practical building blocks on Google Cloud, you can protect yo
 
 Ready to try it out for your own workloads?
 
-1. **Try the companion code and chaos tests:** Clone the [cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture) GitHub repository to run the 60-second local demo or deploy the Terraform modules in a sandbox project.
-2. **Explore the official reliability guide:** Read the [Google Cloud Architecture Framework: Reliability](https://docs.cloud.google.com/architecture/framework/reliability) documentation for deeper guidance on error budgets, failover, and fault isolation.
+1. **Try the companion POC and chaos tests:** Clone the [cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture) GitHub repository to run the free 60-second local demo—or deploy the POC in a sandbox project (remembering to run `./tests/uninstall_gcp.sh` when finished).
+2. **Explore the official reliability guide:** Read the [Google Cloud Architecture Framework: Reliability](https://docs.cloud.google.com/architecture/framework/reliability) and the [official Google Cloud documentation](https://docs.cloud.google.com/) for the latest product capabilities, quotas, and pricing.
 3. **Model your first cells:** Group your services into cell boundaries in [App Hub](https://docs.cloud.google.com/app-hub/docs/overview) and monitor per-cell health and rollouts in [Cloud Hub](https://docs.cloud.google.com/hub/docs/overview).
 4. **Share your thoughts in the comments:** Have you dealt with noisy-neighbor outages in multi-tenant apps, or are you weighing global vs. regional load balancers for your cells? Drop your questions or experiences below!
 
 ### Helpful links and community formatting resources
 
-* Companion code & chaos test suite on GitHub: [cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture)
+* Companion POC code, chaos tests & uninstall script on GitHub: [cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture)
 * [Google Cloud Architecture Framework: Reliability](https://docs.cloud.google.com/architecture/framework/reliability)
+* [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator) and [official Google Cloud documentation](https://docs.cloud.google.com/)
 * [Service Extensions overview for Cloud Load Balancing](https://docs.cloud.google.com/service-extensions/docs/overview)
 * [Cloud WAN and Network Connectivity Center overview](https://cloud.google.com/blog/products/networking/connect-globally-with-cloud-wan-for-the-ai-era)
 * [Cloud Deploy deployment strategies](https://docs.cloud.google.com/deploy/docs/overview)
