@@ -1,0 +1,21 @@
+[package]
+name = "cell-shuffle-router-wasm"
+version = "0.1.0"
+edition = "2021"
+description = "Cloud Load Balancing Service Extensions (Proxy-Wasm) shuffle-sharding cell router"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+proxy-wasm = "0.2"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"

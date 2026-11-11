@@ -1,0 +1,29 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: cell-saas-api
+profiles:
+  - name: canary
+    manifests:
+      rawYaml:
+        - cloudrun-service.yaml
+    deploy:
+      cloudrun: {}
+    verify:
+      - name: verify-cell-slo-burn-rate
+        container:
+          name: slo-verifier
+          image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+          command: ["/bin/bash", "/workspace/verify-cell-slo.sh"]
+  - name: prod
+    manifests:
+      rawYaml:
+        - cloudrun-service.yaml
+    deploy:
+      cloudrun: {}
+    verify:
+      - name: verify-cell-slo-burn-rate
+        container:
+          name: slo-verifier
+          image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+          command: ["/bin/bash", "/workspace/verify-cell-slo.sh"]

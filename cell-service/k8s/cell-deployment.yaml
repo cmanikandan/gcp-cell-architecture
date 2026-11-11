@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cell-api
+  labels:
+    app: cell-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cell-api
+  template:
+    metadata:
+      labels:
+        app: cell-api
+    spec:
+      serviceAccountName: cell-workload-sa
+      containers:
+        - name: cell-api
+          image: cell-api-image
+          ports:
+            - containerPort: 8080
+          env:
+            - name: CELL_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: cell-metadata
+                  key: cell_id
+            - name: SPANNER_INSTANCE
+              valueFrom:
+                configMapKeyRef:
+                  name: cell-metadata
+                  key: spanner_instance
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cell-api-svc
+  annotations:
+    # Exposes zonal container-native NEGs directly to the external Application Load Balancer
+    cloud.google.com/neg: '{"exposed_ports": {"80": {"name": "cell-api-neg"}}}'
+spec:
+  type: ClusterIP
+  selector:
+    app: cell-api
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP

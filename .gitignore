@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Rust / Proxy-Wasm build artifacts
+router-wasm/target/
+router-wasm/package/
+
+# Terraform state & provider cache
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform.lock.hcl
+
+# Diagram scratch renders
+diagrams/*_raw.png
+diagrams/*.html
+
+# OS / Editor
+.DS_Store
+*.swp
