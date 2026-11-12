@@ -235,18 +235,26 @@ If you deploy the full **8-cell** multi-project POC (`us-central1` / `us-east4`)
 
 *Note: All figures above are approximate US list-price estimates excluding network egress and free-tier credits. Always verify current rates in the official Google Cloud pricing pages linked above.*
 
-To deploy the POC into your sandbox project—and **cleanly uninstall every resource afterward** using `uninstall_gcp.sh` so billing stops immediately:
+To deploy the POC into your sandbox project (works directly in **Google Cloud Shell** with zero local Rust or Terraform setup—Cloud Build compiles the `wasm32-wasip1` Service Extension remotely)—and **cleanly uninstall every resource afterward** using `uninstall_gcp.sh` so billing stops immediately:
 
 ```bash
 export PLATFORM_PROJECT_ID="your-platform-host-project"
 export PRIMARY_REGION="us-central1"
 
-# 1. Deploy and test the 8-cell POC on Google Cloud
+# 1. Deploy and test the POC on Google Cloud (4 cells in single-project mode, or 8 cells with cell_project_ids)
 ./tests/deploy_and_test.sh --deploy-gcp
 
 # 2. Tear down all cloud resources & container images when finished (~$0 ongoing cost)
 ./tests/uninstall_gcp.sh
 ```
+
+#### Explore the interactive browser chaos studio
+
+Once `--deploy-gcp` finishes and prints `Anycast Cell Router URL : http://<ANYCAST_VIP>`, open that address in your web browser to launch the built-in **cell architecture and shuffle-sharding live studio**:
+
+* **Animated live routing topology:** Watch real HTTP requests flow from your browser through the global external Application Load Balancer and Proxy-Wasm `LbEdgeExtension` into isolated Cloud Run and Spanner cells—including red blocked arcs (`503`) when a primary cell is poisoned and automatic failover arcs (`Retry #1 → 200 OK`) to the customer's backup cell.
+* **Browser-triggered chaos tests:** Click any cell node directly on the diagram to inject a Spanner-backed poison-pill crash across all Cloud Run instances in that cell (auto-heals after 180 seconds), run the guided **Alice vs. noisy tenant failover walkthrough**, or trigger a **24-tenant live blast-radius sweep** to inspect survival rates across your fleet.
+* **Built-in project ID obfuscation:** Following public-endpoint security best practices, every HTML view and JSON API response masks `GOOGLE_CLOUD_PROJECT` server-side to only its first three characters (for example, `abc************`) so full project identifiers are never exposed to external clients.
 
 ---
 

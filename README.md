@@ -103,14 +103,14 @@ export PRIMARY_REGION="us-central1"
 
 ```text
 .
-├── router-wasm/              # Rust Proxy-Wasm Service Extension (stateless k-of-N shuffle router)
-├── cell-service/             # Cell HTTP backend (Spanner client, Dockerfile, GKE NEG manifest)
+├── router-wasm/              # Rust Proxy-Wasm LbEdgeExtension + Cloud Build Wasm pipeline
+├── cell-service/             # Cell HTTP service, Spanner chaos state & live SVG Chaos Studio UI
 ├── terraform/                # ALB, Cloud WAN (NCC STAR), Cloud Run/GKE, Spanner, Cloud Deploy, App Hub
-├── clouddeploy/              # Skaffold profiles & post-deploy SLO verification gate script
+├── clouddeploy/              # Skaffold v4 profiles, Cloud Run template & SLO verification gate
 ├── tests/                    # Local failover demo, 1,000-tenant chaos test, deploy & uninstall scripts
 ├── diagrams/                 # Google Cloud Architecture Center style PNG diagrams & generator
 ├── DISCUSS_GOOGLE_DEV_POST.md# Companion technical blog article for discuss.google.dev
-├── AGENTS.md                 # Instructions and architectural invariants for AI coding agents
+├── AGENTS.md                 # Instructions, security rules & architectural invariants for AI agents
 └── LICENSE                   # MIT License
 ```
 
