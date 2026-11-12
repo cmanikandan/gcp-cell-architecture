@@ -250,10 +250,11 @@ export PRIMARY_REGION="us-central1"
 
 #### Explore the interactive browser chaos studio
 
-Once `--deploy-gcp` finishes and prints `Anycast Cell Router URL : http://<ANYCAST_VIP>`, open that address in your web browser to launch the built-in **cell architecture and shuffle-sharding live studio**:
+Once `--deploy-gcp` finishes and prints `Anycast Cell Router URL : http://<ANYCAST_VIP>`, open that address in your web browser to launch the built-in **5-box guided cell architecture and shuffle-sharding live explorer**:
 
-* **Animated live routing topology:** Watch real HTTP requests flow from your browser through the global external Application Load Balancer and Proxy-Wasm `LbEdgeExtension` into isolated Cloud Run and Spanner cells—including red blocked arcs (`503`) when a primary cell is poisoned and automatic failover arcs (`Retry #1 → 200 OK`) to the customer's backup cell.
-* **Browser-triggered chaos tests:** Click any cell node directly on the diagram to inject a Spanner-backed poison-pill crash across all Cloud Run instances in that cell (auto-heals after 180 seconds), run the guided **Alice vs. noisy tenant failover walkthrough**, or trigger a **24-tenant live blast-radius sweep** to inspect survival rates across your fleet.
+* **Built-in architecture blueprint & per-box guides:** Explore all four Google Cloud reference diagrams right inside **Box 1**, with plain-English explanations and step-by-step *"What to do here"* instructions inside every box on the page.
+* **Live-synced routing topology:** Watch real HTTP requests flow from your browser through the global external Application Load Balancer and Proxy-Wasm `LbEdgeExtension` into isolated Cloud Run and Spanner cells—automatically re-probing whenever a cell crashes or heals so blocked (`503`) and backup failover (`Retry #1 → 200 OK`) paths always match live cell health.
+* **Browser-triggered chaos tests & 24-customer blast matrix:** Click any cell to inject a Spanner-backed poison-pill crash across all Cloud Run instances in that cell (auto-heals after 180 seconds), run the **4-step guided failover demo**, or click any tile in the **24-customer blast matrix** to trace its live failover path and Spanner ledger reads.
 * **Built-in project ID obfuscation:** Following public-endpoint security best practices, every HTML view and JSON API response masks `GOOGLE_CLOUD_PROJECT` server-side to only its first three characters (for example, `abc************`) so full project identifiers are never exposed to external clients.
 
 ---

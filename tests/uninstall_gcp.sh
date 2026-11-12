@@ -20,7 +20,7 @@ AR_REPO="${AR_REPO:-cells}"
 WASM_REPO_IMAGE="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/shuffle-router"
 CELL_REPO_IMAGE="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/cell-api"
 WASM_URI="${WASM_REPO_IMAGE}:v0.1.1"
-CELL_IMAGE_URI="${CELL_REPO_IMAGE}:v1.4.2"
+CELL_IMAGE_URI="${CELL_REPO_IMAGE}:v1.4.3"
 
 echo "========================================================================"
 echo " Google Cloud Cell-Based Architecture POC — Teardown & Uninstall"

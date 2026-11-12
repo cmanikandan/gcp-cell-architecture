@@ -113,7 +113,7 @@ else
 fi
 
 echo "==> [2/6] Building cell workload container image..."
-CELL_IMAGE_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/cell-api:v1.4.2"
+CELL_IMAGE_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/cell-api:v1.4.3"
 if [[ "${FORCE_REBUILD:-0}" != "1" ]] && gcloud artifacts docker images describe "${CELL_IMAGE_URI}" --quiet >/dev/null 2>&1; then
   echo "    Reusing existing cell image ${CELL_IMAGE_URI} (set FORCE_REBUILD=1 to rebuild)."
 else

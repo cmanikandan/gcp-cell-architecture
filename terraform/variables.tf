@@ -62,7 +62,7 @@ variable "compute_runtime" {
 variable "cell_container_image" {
   description = "Container image URI in Artifact Registry for the cell API service."
   type        = string
-  default     = "us-central1-docker.pkg.dev/saas-platform-prod/cells/cell-api:v1.4.2"
+  default     = "us-central1-docker.pkg.dev/saas-platform-prod/cells/cell-api:v1.4.3"
 }
 
 variable "wasm_plugin_image_uri" {

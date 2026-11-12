@@ -75,10 +75,11 @@ export PRIMARY_REGION="us-central1"
 
 ### Interactive browser topology & chaos studio
 
-Once `--deploy-gcp` prints `Anycast Cell Router URL : http://<ANYCAST_VIP>`, open that URL in any browser to launch the **Interactive Cell Architecture & Shuffle-Sharding Studio**:
+Once `--deploy-gcp` prints `Anycast Cell Router URL : http://<ANYCAST_VIP>`, open that URL in any browser to launch the **5-box guided Cell Architecture & Shuffle-Sharding Live Explorer**:
 
-* **Live animated SVG routing topology:** Watch client requests traverse the Global External ALB + Proxy-Wasm `LbEdgeExtension` into isolated Cloud Run + Spanner cells, including blocked `503` primary attempts and automatic `Retry #1 → 200 OK` failover arcs.
-* **Browser-triggered chaos experiments:** Click any cell to inject a Spanner-backed poison-pill crash (auto-heals after 180s), run the **4-step Alice vs. Noisy Tenant failover walkthrough**, or run a **24-tenant live blast-radius sweep**.
+* **Embedded Architecture Blueprint tabs (Box 1):** Browse all 4 Google Cloud Architecture Center diagrams (end-to-end cell topology, shuffle-sharding math, global vs. regional ingress, and Cloud Deploy wave rollouts) directly inside the app with plain-English explanations and step-by-step "What to do here" guides in every box.
+* **Live animated SVG routing topology (Box 2):** Watch real HTTP requests traverse the Global External ALB + Proxy-Wasm `LbEdgeExtension` into isolated Cloud Run + Spanner cells, automatically re-probing whenever a cell crashes or heals so arrows always match live reality.
+* **Browser-triggered chaos controls & 24-customer blast matrix (Boxes 3–5):** Crash or heal individual cells (Spanner-backed with 180s auto-heal), run the **4-step Guided Failover Demo**, click any of 24 live customer tiles to trace its hand, and inspect raw HTTP retries and Spanner timestamps in the live request log.
 * **Server-side project ID obfuscation:** All HTML and JSON endpoints mask `GOOGLE_CLOUD_PROJECT` server-side to only its first 3 characters (`abc************`) so full project IDs are never exposed to external clients.
 
 To switch between a **global Anycast external Application Load Balancer** (default) and **sovereign regional external Application Load Balancers** (for strict data residency), set `ingress_mode = "regional"` in `terraform/variables.tf` or pass `-var="ingress_mode=regional"`.
