@@ -153,6 +153,16 @@ resource "google_compute_global_forwarding_rule" "cell_anycast_fr" {
   target                = google_compute_target_http_proxy.cell_http_proxy[0].id
 }
 
+locals {
+  wasm_plugin_config_b64 = base64encode(jsonencode({
+    total_cells   = length(local.cells)
+    shard_size    = local.effective_shard_size
+    hash_salt     = "gcp-cell-v1-prod"
+    drained_cells = []
+  }))
+  wasm_version_id = "v-${substr(md5("${var.wasm_plugin_image_uri}:${local.wasm_plugin_config_b64}"), 0, 8)}"
+}
+
 # Service Extensions Proxy-Wasm Plugin computing deterministic shuffle-shard cell assignment
 resource "google_network_services_wasm_plugin" "shuffle_router" {
   provider        = google-beta
@@ -161,7 +171,7 @@ resource "google_network_services_wasm_plugin" "shuffle_router" {
   name            = "cell-shuffle-router-wasm"
   description     = "Deterministic Fisher-Yates shuffle-sharding cell router"
   location        = "global"
-  main_version_id = "v1"
+  main_version_id = local.wasm_version_id
 
   log_config {
     enable        = true
@@ -170,15 +180,10 @@ resource "google_network_services_wasm_plugin" "shuffle_router" {
   }
 
   versions {
-    version_name = "v1"
-    description  = "v1 shuffle-sharding router plugin"
-    image_uri    = var.wasm_plugin_image_uri
-    plugin_config_data = base64encode(jsonencode({
-      total_cells   = length(local.cells)
-      shard_size    = local.effective_shard_size
-      hash_salt     = "gcp-cell-v1-prod"
-      drained_cells = []
-    }))
+    version_name       = local.wasm_version_id
+    description        = "Shuffle-sharding router plugin (${local.wasm_version_id})"
+    image_uri          = var.wasm_plugin_image_uri
+    plugin_config_data = local.wasm_plugin_config_b64
   }
 }
 

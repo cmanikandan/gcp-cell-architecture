@@ -20,14 +20,26 @@ if [[ "${MODE}" == "--local-only" ]]; then
   echo ""
   echo "==> [Part 2] Running 1,000-customer live HTTP shuffle-sharding benchmark..."
   python3 "${ROOT_DIR}/tests/live_chaos_test.py" --tenants 1000
-  echo "==> Verifying Cloud Deploy SLO verification gate script..."
+  echo "==> Verifying Cloud Deploy SLO gate & GCP Project ID obfuscation..."
   CELL_PORT=19990
-  QUIET_LOGS=1 CELL_ID=cell-00 PORT="${CELL_PORT}" python3 "${ROOT_DIR}/cell-service/app.py" --host 127.0.0.1 --port "${CELL_PORT}" &
+  QUIET_LOGS=1 GOOGLE_CLOUD_PROJECT="secret-corp-prod-994821" CELL_ID=cell-00 PORT="${CELL_PORT}" \
+    python3 "${ROOT_DIR}/cell-service/app.py" --host 127.0.0.1 --port "${CELL_PORT}" &
   CELL_PID=$!
   trap 'kill "${CELL_PID}" 2>/dev/null || true' EXIT
   sleep 0.5
   SKIP_GCP_MQL=1 CLOUD_DEPLOY_TARGET=cell-00 CELL_ROUTER_URL="http://127.0.0.1:${CELL_PORT}" \
     bash "${ROOT_DIR}/clouddeploy/verify-cell-slo.sh"
+  python3 - "${CELL_PORT}" <<'PY'
+import json, sys, urllib.request
+port = sys.argv[1]
+base = f"http://127.0.0.1:{port}"
+for path, accept in [("/", "text/html"), ("/healthz", "application/json"), ("/chaos/status", "application/json"), ("/metrics", "application/json")]:
+    req = urllib.request.Request(base + path, headers={"Accept": accept})
+    body = urllib.request.urlopen(req, timeout=2.0).read().decode("utf-8")
+    assert "secret-corp-prod-994821" not in body, f"Unmasked project ID leaked on {path}!"
+    assert "sec************" in body, f"Expected masked project ID 'sec************' on {path}!"
+print("[security] PASS: GCP Project ID obfuscated ('sec************') across HTML and JSON endpoints.")
+PY
   exit 0
 fi
 
@@ -90,7 +102,7 @@ gcloud apphub boundary update \
   --quiet >/dev/null 2>&1 || true
 
 echo "==> [1/6] Building & packaging Proxy-Wasm shuffle-sharding Service Extension in Cloud Build..."
-WASM_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/shuffle-router:v0.1.0"
+WASM_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/shuffle-router:v0.1.1"
 if [[ "${FORCE_REBUILD:-0}" != "1" ]] && gcloud artifacts docker images describe "${WASM_URI}" --quiet >/dev/null 2>&1; then
   echo "    Reusing existing Wasm image ${WASM_URI} (set FORCE_REBUILD=1 to rebuild)."
 else
@@ -101,7 +113,7 @@ else
 fi
 
 echo "==> [2/6] Building cell workload container image..."
-CELL_IMAGE_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/cell-api:v1.4.1"
+CELL_IMAGE_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/cell-api:v1.4.2"
 if [[ "${FORCE_REBUILD:-0}" != "1" ]] && gcloud artifacts docker images describe "${CELL_IMAGE_URI}" --quiet >/dev/null 2>&1; then
   echo "    Reusing existing cell image ${CELL_IMAGE_URI} (set FORCE_REBUILD=1 to rebuild)."
 else

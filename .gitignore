@@ -7,6 +7,7 @@ venv/
 # Rust / Proxy-Wasm build artifacts
 router-wasm/target/
 router-wasm/package/
+router-wasm/Cargo.lock
 
 # Terraform state & provider cache
 .terraform/

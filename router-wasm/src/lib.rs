@@ -107,11 +107,23 @@ fn compute_virtual_shard(tenant_id: &str, salt: &str, total_cells: usize, shard_
     for i in 0..shard_size {
         let remaining = total_cells - i;
         let h = fnv1a_64(key.as_bytes(), i as u64);
-        let pick = i + (h as usize % remaining);
+        let pick = i + ((h % (remaining as u64)) as usize);
         deck.swap(i, pick);
     }
     deck.truncate(shard_size);
     deck
+}
+
+/// Parses an explicit operational cell header (`cell-00` .. `cell-NN`) when within `0..total_cells`.
+fn parse_cell_override(raw: &str, total_cells: usize) -> Option<usize> {
+    let trimmed = raw.trim().to_ascii_lowercase();
+    let num_part = trimmed.strip_prefix("cell-")?;
+    let idx = num_part.parse::<usize>().ok()?;
+    if idx < total_cells {
+        Some(idx)
+    } else {
+        None
+    }
 }
 
 impl HttpContext for ShuffleRouterHttp {
@@ -140,9 +152,21 @@ impl HttpContext for ShuffleRouterHttp {
             .collect();
 
         let active_pool = if healthy_hand.is_empty() { &hand } else { &healthy_hand };
-        let selected_cell = active_pool[retry_attempt % active_pool.len()];
 
-        let mut sorted_hand = hand.clone();
+        let explicit_cell = self
+            .get_http_request_header("x-target-cell")
+            .or_else(|| self.get_http_request_header("x-cell-override"))
+            .and_then(|v| parse_cell_override(&v, self.config.total_cells));
+
+        let selected_cell = explicit_cell.unwrap_or_else(|| active_pool[retry_attempt % active_pool.len()]);
+
+        let ordered_hand = hand
+            .iter()
+            .map(|c| format!("cell-{:02}", c))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let mut sorted_hand = hand;
         sorted_hand.sort_unstable();
         let shard_signature = sorted_hand
             .iter()
@@ -151,10 +175,13 @@ impl HttpContext for ShuffleRouterHttp {
             .join(",");
 
         let target_cell = format!("cell-{:02}", selected_cell);
+        let fleet_config = format!("N={},k={}", self.config.total_cells, self.config.shard_size);
 
-        // Inject routing headers consumed by the Cloud Load Balancing URL map routeRules
+        // Inject routing & observability headers consumed by Cloud Load Balancing and cell backends
         self.set_http_request_header("x-cell-id", Some(&target_cell));
         self.set_http_request_header("x-virtual-shard", Some(&shard_signature));
+        self.set_http_request_header("x-ordered-hand", Some(&ordered_hand));
+        self.set_http_request_header("x-fleet-config", Some(&fleet_config));
 
         Action::Continue
     }

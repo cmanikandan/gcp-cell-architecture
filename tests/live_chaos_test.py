@@ -57,6 +57,11 @@ class LocalCellRouterProxy(BaseHTTPRequestHandler):
     def _proxy_request(self, method: str) -> None:
         tenant_id = self.headers.get("X-Tenant-Id", "anonymous")
         poison = self.headers.get("X-Poison-Payload", "")
+        accept_hdr = self.headers.get("Accept", "")
+        content_type_in = self.headers.get("Content-Type", "application/json")
+        length = int(self.headers.get("Content-Length", "0"))
+        req_body = self.rfile.read(length) if (method == "POST" and length > 0) else (b"" if method == "POST" else None)
+
         total_cells = len(self.cell_ports)
 
         hand = compute_virtual_shard(
@@ -65,48 +70,73 @@ class LocalCellRouterProxy(BaseHTTPRequestHandler):
             shard_size=self.shard_size,
             salt=self.salt,
         )
+        ordered_hand_sig = ",".join(f"cell-{c:02d}" for c in hand)
         shard_sig = ",".join(f"cell-{c:02d}" for c in sorted(hand))
+        fleet_cfg = f"N={total_cells},k={self.shard_size}"
 
-        # Mirror Envoy/ALB retryPolicy (retries across the k cells in the tenant's hand on 5xx)
+        target_override = (
+            self.headers.get("X-Target-Cell") or self.headers.get("X-Cell-Override") or ""
+        ).strip().lower()
+        explicit_retry = self.headers.get("X-Retry-Attempt")
+
+        if target_override.startswith("cell-") and target_override[5:].isdigit():
+            idx = int(target_override[5:])
+            candidate_sequence = [(0, idx)] if 0 <= idx < total_cells else [(0, hand[0])]
+        elif explicit_retry is not None and explicit_retry.isdigit():
+            att = int(explicit_retry)
+            candidate_sequence = [(att, hand[att % len(hand)])]
+        else:
+            # Mirror Envoy/ALB automatic retryPolicy across the k cells in the tenant's hand on 5xx
+            candidate_sequence = list(enumerate(hand))
+
         last_status = 503
         last_body = b'{"error":"ALL_SHARD_CELLS_UNHEALTHY"}'
-        served_cell = f"cell-{hand[0]:02d}"
+        last_content_type = "application/json"
+        served_cell = f"cell-{candidate_sequence[0][1]:02d}"
 
-        for attempt_idx, cell_idx in enumerate(hand):
+        for attempt_idx, cell_idx in candidate_sequence:
             port = self.cell_ports[cell_idx]
             url = f"http://127.0.0.1:{port}{self.path}"
-            req = urllib.request.Request(
-                url,
-                data=b"" if method == "POST" else None,
-                method=method,
-                headers={
-                    "X-Tenant-Id": tenant_id,
-                    "X-Virtual-Shard": shard_sig,
-                    "X-Retry-Attempt": str(attempt_idx),
-                    **({"X-Poison-Payload": poison} if poison else {}),
-                },
-            )
+            fwd_headers = {
+                "X-Tenant-Id": tenant_id,
+                "X-Cell-Id": f"cell-{cell_idx:02d}",
+                "X-Virtual-Shard": shard_sig,
+                "X-Ordered-Hand": ordered_hand_sig,
+                "X-Fleet-Config": fleet_cfg,
+                "X-Retry-Attempt": str(attempt_idx),
+            }
+            if accept_hdr:
+                fwd_headers["Accept"] = accept_hdr
+            if method == "POST":
+                fwd_headers["Content-Type"] = content_type_in
+            if poison:
+                fwd_headers["X-Poison-Payload"] = poison
+
+            req = urllib.request.Request(url, data=req_body, method=method, headers=fwd_headers)
             try:
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                with urllib.request.urlopen(req, timeout=2.5) as resp:
                     last_status = resp.status
                     last_body = resp.read()
+                    last_content_type = resp.headers.get("Content-Type", "application/json")
                     served_cell = resp.headers.get("X-Served-By-Cell", f"cell-{cell_idx:02d}")
                     break
             except urllib.error.HTTPError as exc:
                 last_status = exc.code
                 last_body = exc.read()
-                # If a poison-pill tenant retries across its own hand, each retry poisons the next
-                # cell in its k-cell shard—worst-case scenario! Healthy tenants stop at the first 200 OK.
+                last_content_type = exc.headers.get("Content-Type", "application/json")
+                served_cell = exc.headers.get("X-Served-By-Cell", f"cell-{cell_idx:02d}")
                 continue
             except Exception:
                 last_status = 503
                 continue
 
         self.send_response(last_status)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", last_content_type)
         self.send_header("Content-Length", str(len(last_body)))
         self.send_header("X-Served-By-Cell", served_cell)
         self.send_header("X-Virtual-Shard", shard_sig)
+        self.send_header("X-Ordered-Hand", ordered_hand_sig)
+        self.send_header("X-Fleet-Config", fleet_cfg)
         self.end_headers()
         self.wfile.write(last_body)
 

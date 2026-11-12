@@ -1,6 +1,6 @@
 [package]
 name = "cell-shuffle-router-wasm"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Cloud Load Balancing Service Extensions (Proxy-Wasm) shuffle-sharding cell router"
 

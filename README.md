@@ -73,6 +73,14 @@ export PRIMARY_REGION="us-central1"
 
 > **Single-project Cloud Shell mode vs. multi-project fleet:** When `cell_project_ids` is omitted, `--deploy-gcp` automatically enables required APIs, compiles the `wasm32-wasip1` Service Extension remotely in Cloud Build, and deploys **4 isolated cells** (`POC_CELL_COUNT=4`, ~`\$0.80/hr`) into `PLATFORM_PROJECT_ID` so 4 cell VPCs + `default` VPC fit cleanly inside Google Cloud's default 5-VPC per-project quota. To deploy the full **8-cell** multi-project topology (~`\$1.60/hr`), pass `cell_project_ids` in Terraform or set `POC_CELL_COUNT=8`.
 
+### Interactive browser topology & chaos studio
+
+Once `--deploy-gcp` prints `Anycast Cell Router URL : http://<ANYCAST_VIP>`, open that URL in any browser to launch the **Interactive Cell Architecture & Shuffle-Sharding Studio**:
+
+* **Live animated SVG routing topology:** Watch client requests traverse the Global External ALB + Proxy-Wasm `LbEdgeExtension` into isolated Cloud Run + Spanner cells, including blocked `503` primary attempts and automatic `Retry #1 → 200 OK` failover arcs.
+* **Browser-triggered chaos experiments:** Click any cell to inject a Spanner-backed poison-pill crash (auto-heals after 180s), run the **4-step Alice vs. Noisy Tenant failover walkthrough**, or run a **24-tenant live blast-radius sweep**.
+* **Server-side project ID obfuscation:** All HTML and JSON endpoints mask `GOOGLE_CLOUD_PROJECT` server-side to only its first 3 characters (`abc************`) so full project IDs are never exposed to external clients.
+
 To switch between a **global Anycast external Application Load Balancer** (default) and **sovereign regional external Application Load Balancers** (for strict data residency), set `ingress_mode = "regional"` in `terraform/variables.tf` or pass `-var="ingress_mode=regional"`.
 
 ### Uninstall & tear down Google Cloud resources
