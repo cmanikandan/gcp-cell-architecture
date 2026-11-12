@@ -128,11 +128,20 @@ def _send_tenant_req(router_url: str, tenant_id: str, poison: bool = False) -> t
         headers["X-Poison-Payload"] = "crash"
     req = urllib.request.Request(f"{router_url}/v1/infer", method="POST", headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
-            return resp.status, json.loads(resp.read().decode("utf-8"))
+        with urllib.request.urlopen(req, timeout=10.0) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            try:
+                return resp.status, json.loads(raw)
+            except json.JSONDecodeError:
+                return resp.status, {"raw_body": raw[:200]}
     except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8") or "{}"
-        return exc.code, json.loads(body)
+        body = exc.read().decode("utf-8", errors="replace") or "{}"
+        try:
+            return exc.code, json.loads(body)
+        except json.JSONDecodeError:
+            return exc.code, {"raw_body": body[:200]}
+    except Exception as exc:
+        return 503, {"error": str(exc)}
 
 
 def run_live_experiment(total_cells: int, shard_size: int, num_tenants: int, base_port: int) -> dict:
@@ -229,9 +238,14 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.target_url:
-        print(f"Running remote health check against {args.target_url}...")
-        code, payload = _send_tenant_req(args.target_url.rstrip("/"), "canary-probe-0001", poison=False)
-        print(json.dumps({"status_code": code, "response": payload}, indent=2))
+        base_url = args.target_url.rstrip("/")
+        print(f"Running live multi-tenant shuffle-shard check against {base_url}...")
+        sample_tenants = ["alice-corp", "bob-retail", "charlie-bank", "delta-health"]
+        probe_summary = []
+        for tid in sample_tenants:
+            code, payload = _send_tenant_req(base_url, tid, poison=False)
+            probe_summary.append({"tenant": tid, "status_code": code, "response": payload})
+        print(json.dumps(probe_summary, indent=2))
         return
 
     print("=" * 78)

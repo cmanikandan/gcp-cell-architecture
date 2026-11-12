@@ -3,10 +3,26 @@
 # ------------------------------------------------------------------------------
 
 resource "google_compute_network" "cell_vpc" {
-  for_each                = local.cells
+  for_each                = var.dedicated_vpc_per_cell ? local.cells : {}
   project                 = each.value.project_id
   name                    = "${each.key}-vpc"
   auto_create_subnetworks = false
+}
+
+# Fallback shared sandbox VPC used only when a single-project POC already has
+# custom VPCs consuming Google Cloud's default 5-VPC per-project quota.
+resource "google_compute_network" "shared_poc_vpc" {
+  count                   = var.dedicated_vpc_per_cell ? 0 : 1
+  project                 = var.platform_project_id
+  name                    = "cellular-poc-vpc"
+  auto_create_subnetworks = false
+}
+
+locals {
+  cell_network_id = {
+    for k, v in local.cells :
+    k => (var.dedicated_vpc_per_cell ? google_compute_network.cell_vpc[k].id : google_compute_network.shared_poc_vpc[0].id)
+  }
 }
 
 resource "google_compute_subnetwork" "cell_subnet" {
@@ -14,7 +30,7 @@ resource "google_compute_subnetwork" "cell_subnet" {
   project                  = each.value.project_id
   name                     = "${each.key}-subnet"
   region                   = each.value.region
-  network                  = google_compute_network.cell_vpc[each.key].id
+  network                  = local.cell_network_id[each.key]
   ip_cidr_range            = cidrsubnet("10.64.0.0/12", 8, each.value.index)
   private_ip_google_access = true
 }
@@ -81,13 +97,14 @@ resource "google_spanner_database_iam_member" "cell_db_user" {
   member   = "serviceAccount:${google_service_account.cell_workload_sa[each.key].email}"
 }
 
-# Cell-scoped Cloud Run service with Direct VPC Egress into the cell's isolated VPC
+# Cell-scoped Cloud Run service with Direct VPC Egress into the cell's isolated subnet
 resource "google_cloud_run_v2_service" "cell_api" {
-  for_each = var.compute_runtime == "cloud_run" ? local.cells : {}
-  project  = each.value.project_id
-  name     = "${each.key}-api"
-  location = each.value.region
-  ingress  = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  for_each            = var.compute_runtime == "cloud_run" ? local.cells : {}
+  project             = each.value.project_id
+  name                = "${each.key}-api"
+  location            = each.value.region
+  ingress             = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  deletion_protection = var.enable_deletion_protection
 
   template {
     service_account = google_service_account.cell_workload_sa[each.key].email
@@ -99,7 +116,7 @@ resource "google_cloud_run_v2_service" "cell_api" {
 
     vpc_access {
       network_interfaces {
-        network    = google_compute_network.cell_vpc[each.key].id
+        network    = local.cell_network_id[each.key]
         subnetwork = google_compute_subnetwork.cell_subnet[each.key].id
       }
       egress = "PRIVATE_RANGES_ONLY"
@@ -133,15 +150,27 @@ resource "google_cloud_run_v2_service" "cell_api" {
   }
 }
 
+# Allow External ALB Serverless NEG requests to invoke each cell's Cloud Run service in POC mode.
+# Direct *.run.app URLs remain blocked at the network edge by INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER.
+resource "google_cloud_run_v2_service_iam_member" "alb_public_invoker" {
+  for_each = var.compute_runtime == "cloud_run" && var.allow_unauthenticated_invoker ? local.cells : {}
+  project  = each.value.project_id
+  location = each.value.region
+  name     = google_cloud_run_v2_service.cell_api[each.key].name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
 # Optional GKE Autopilot cluster per cell when stateful sidecars or custom GPUs are required
 resource "google_container_cluster" "cell_gke" {
-  for_each         = var.compute_runtime == "gke" ? local.cells : {}
-  project          = each.value.project_id
-  name             = "${each.key}-autopilot"
-  location         = each.value.region
-  enable_autopilot = true
-  network          = google_compute_network.cell_vpc[each.key].id
-  subnetwork       = google_compute_subnetwork.cell_subnet[each.key].id
+  for_each            = var.compute_runtime == "gke" ? local.cells : {}
+  project             = each.value.project_id
+  name                = "${each.key}-autopilot"
+  location            = each.value.region
+  enable_autopilot    = true
+  deletion_protection = var.enable_deletion_protection
+  network             = local.cell_network_id[each.key]
+  subnetwork          = google_compute_subnetwork.cell_subnet[each.key].id
 
   release_channel {
     channel = "REGULAR"

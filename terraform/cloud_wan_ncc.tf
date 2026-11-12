@@ -4,9 +4,9 @@
 # ------------------------------------------------------------------------------
 
 resource "google_network_connectivity_hub" "cloud_wan_hub" {
-  project        = var.platform_project_id
-  name           = "enterprise-cellular-wan-hub"
-  description    = "Cloud WAN hub isolating cellular VPC spokes while enabling hybrid north-south ingress"
+  project         = var.platform_project_id
+  name            = "enterprise-cellular-wan-hub"
+  description     = "Cloud WAN hub isolating cellular VPC spokes while enabling hybrid north-south ingress"
   preset_topology = "STAR"
 }
 
@@ -29,13 +29,13 @@ resource "google_network_connectivity_group" "isolated_cell_spokes" {
   name        = "edge"
   description = "Isolated cell VPC spokes — east-west cell-to-cell routing is strictly prohibited"
   auto_accept {
-    auto_accept_projects = values(var.cell_project_ids)
+    auto_accept_projects = local.unique_project_ids
   }
 }
 
 resource "google_network_connectivity_spoke" "cell_vpc_spoke" {
-  for_each    = local.cells
-  project     = var.platform_project_id
+  for_each    = var.dedicated_vpc_per_cell ? local.cells : {}
+  project     = each.value.project_id
   name        = "${each.key}-vpc-spoke"
   location    = "global"
   hub         = google_network_connectivity_hub.cloud_wan_hub.id
@@ -44,5 +44,19 @@ resource "google_network_connectivity_spoke" "cell_vpc_spoke" {
 
   linked_vpc_network {
     uri = google_compute_network.cell_vpc[each.key].self_link
+  }
+}
+
+resource "google_network_connectivity_spoke" "shared_poc_vpc_spoke" {
+  count       = var.dedicated_vpc_per_cell ? 0 : 1
+  project     = var.platform_project_id
+  name        = "cellular-poc-vpc-spoke"
+  location    = "global"
+  hub         = google_network_connectivity_hub.cloud_wan_hub.id
+  group       = google_network_connectivity_group.isolated_cell_spokes.id
+  description = "Fallback sandbox VPC spoke when per-project VPC quota < 4 custom VPCs"
+
+  linked_vpc_network {
+    uri = google_compute_network.shared_poc_vpc[0].self_link
   }
 }

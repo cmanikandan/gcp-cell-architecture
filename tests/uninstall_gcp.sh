@@ -49,12 +49,18 @@ fi
 
 echo "==> [2/3] Running Terraform destroy across all cells and shared routing resources..."
 terraform -chdir="${ROOT_DIR}/terraform" init -input=false
-terraform -chdir="${ROOT_DIR}/terraform" destroy -auto-approve \
-  -var="platform_project_id=${PLATFORM_PROJECT_ID}" \
-  -var="primary_region=${REGION}" \
-  -var="cell_container_image=${CELL_IMAGE_URI}" \
-  -var="wasm_plugin_image_uri=${WASM_URI}" \
-  -var="enable_deletion_protection=false"
+if [[ -f "${ROOT_DIR}/terraform/poc.auto.tfvars" ]]; then
+  terraform -chdir="${ROOT_DIR}/terraform" destroy -auto-approve \
+    -var="enable_deletion_protection=false"
+  rm -f "${ROOT_DIR}/terraform/poc.auto.tfvars"
+else
+  terraform -chdir="${ROOT_DIR}/terraform" destroy -auto-approve \
+    -var="platform_project_id=${PLATFORM_PROJECT_ID}" \
+    -var="primary_region=${REGION}" \
+    -var="cell_container_image=${CELL_IMAGE_URI}" \
+    -var="wasm_plugin_image_uri=${WASM_URI}" \
+    -var="enable_deletion_protection=false"
+fi
 
 echo "==> [3/3] Cleaning up POC container & Wasm images from Artifact Registry..."
 if command -v gcloud >/dev/null 2>&1; then

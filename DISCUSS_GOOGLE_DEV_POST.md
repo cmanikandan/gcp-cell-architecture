@@ -222,7 +222,7 @@ Step 4/4: Sending alice-3's next request through the load balancer...
 
 #### Approximate cost of running the POC on Google Cloud
 
-If you choose to deploy the full 8-cell POC into a Google Cloud sandbox (`us-central1` / `us-east4`), the Terraform variables default to minimal POC sizing (`100` Spanner processing units on `STANDARD` edition per cell and scale-to-zero Cloud Run with `min_instance_count = 0`). Expect **~\$3 to \$5 USD total for a 2-hour hands-on test session**—or **~\$1.60/hour (~\$1,165/month)** if you forget to tear it down:
+If you deploy the full **8-cell** multi-project POC (`us-central1` / `us-east4`), the Terraform variables default to minimal POC sizing (`100` Spanner processing units on `STANDARD` edition per cell and scale-to-zero Cloud Run with `min_instance_count = 0`). Expect **~\$3 to \$5 USD total for a 2-hour hands-on test session**—or **~\$1.60/hour (~\$1,165/month)** if left running (in **single-project Cloud Shell mode**, `--deploy-gcp` defaults to **4 cells** at roughly half this rate—**~\$0.80/hour**—to fit Google Cloud's default 5-VPC per-project quota):
 
 | Google Cloud service | 8-cell POC configuration | Approx. hourly rate | 2-hour POC test | 24/7 monthly rate | Official pricing reference |
 | :--- | :--- | :---: | :---: | :---: | :--- |

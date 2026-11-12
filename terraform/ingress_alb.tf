@@ -4,7 +4,7 @@
 
 resource "google_compute_region_network_endpoint_group" "cell_serverless_neg" {
   for_each              = var.compute_runtime == "cloud_run" ? local.cells : {}
-  project               = var.platform_project_id
+  project               = each.value.project_id
   name                  = "${each.key}-serverless-neg"
   network_endpoint_type = "SERVERLESS"
   region                = each.value.region
@@ -17,7 +17,7 @@ resource "google_compute_region_network_endpoint_group" "cell_serverless_neg" {
 resource "google_compute_security_policy" "cell_edge_armor" {
   project     = var.platform_project_id
   name        = "cell-router-edge-armor"
-  description = "Adaptive Protection and per-tenant rate limiting ahead of cell routing"
+  description = "Cloud Armor per-tenant rate limiting ahead of cell routing"
 
   dynamic "adaptive_protection_config" {
     for_each = var.enable_adaptive_protection ? [1] : []
@@ -38,9 +38,9 @@ resource "google_compute_security_policy" "cell_edge_armor" {
       }
     }
     rate_limit_options {
-      conform_action = "allow"
-      exceed_action  = "deny(429)"
-      enforce_on_key = "HTTP_HEADER"
+      conform_action      = "allow"
+      exceed_action       = "deny(429)"
+      enforce_on_key      = "HTTP_HEADER"
       enforce_on_key_name = "x-tenant-id"
       rate_limit_threshold {
         count        = 2000
@@ -74,33 +74,36 @@ resource "google_compute_backend_service" "cell_backend_global" {
     group = google_compute_region_network_endpoint_group.cell_serverless_neg[each.key].id
   }
 
-  outlier_detection {
-    consecutive_errors = 3
-    interval {
-      seconds = 5
+  dynamic "outlier_detection" {
+    for_each = var.compute_runtime == "gke" ? [1] : []
+    content {
+      consecutive_errors = 3
+      interval {
+        seconds = 5
+      }
+      base_ejection_time {
+        seconds = 30
+      }
+      max_ejection_percent = 100
     }
-    base_ejection_time {
-      seconds = 30
-    }
-    max_ejection_percent = 100
   }
 }
 
-# Global URL Map steering requests via x-cell-id header stamped by Proxy-Wasm
+# Global URL Map steering requests via x-cell-id header stamped by Proxy-Wasm LbEdgeExtension
 resource "google_compute_url_map" "cell_router_global" {
   count           = var.ingress_mode == "global" ? 1 : 0
   project         = var.platform_project_id
   name            = "global-cell-router-urlmap"
-  default_service = google_compute_backend_service.cell_backend_global["cell-00"].id
+  default_service = google_compute_backend_service.cell_backend_global[local.sorted_cell_ids[0]].id
 
   host_rule {
-    hosts        = ["api.example.com", "*"]
+    hosts        = ["*"]
     path_matcher = "cellular-routes"
   }
 
   path_matcher {
     name            = "cellular-routes"
-    default_service = google_compute_backend_service.cell_backend_global["cell-00"].id
+    default_service = google_compute_backend_service.cell_backend_global[local.sorted_cell_ids[0]].id
 
     dynamic "route_rules" {
       for_each = local.cells
@@ -115,7 +118,7 @@ resource "google_compute_url_map" "cell_router_global" {
         }
         route_action {
           retry_policy {
-            num_retries      = 2
+            num_retries      = max(1, local.effective_shard_size - 1)
             retry_conditions = ["5xx", "connect-failure", "refused-stream"]
           }
         }
@@ -146,40 +149,47 @@ resource "google_compute_global_forwarding_rule" "cell_anycast_fr" {
   ip_protocol           = "TCP"
   port_range            = "80"
   load_balancing_scheme = "EXTERNAL_MANAGED"
+  network_tier          = "PREMIUM"
   target                = google_compute_target_http_proxy.cell_http_proxy[0].id
 }
 
 # Service Extensions Proxy-Wasm Plugin computing deterministic shuffle-shard cell assignment
 resource "google_network_services_wasm_plugin" "shuffle_router" {
-  provider    = google-beta
-  count       = var.ingress_mode == "global" ? 1 : 0
-  project     = var.platform_project_id
-  name        = "cell-shuffle-router-wasm"
-  location    = "global"
+  provider        = google-beta
+  count           = var.ingress_mode == "global" ? 1 : 0
+  project         = var.platform_project_id
+  name            = "cell-shuffle-router-wasm"
+  description     = "Deterministic Fisher-Yates shuffle-sharding cell router"
+  location        = "global"
   main_version_id = "v1"
 
   log_config {
-    enable      = true
-    sample_rate = 0.05
+    enable        = true
+    sample_rate   = 0.05
+    min_log_level = "INFO"
   }
 
   versions {
     version_name = "v1"
+    description  = "v1 shuffle-sharding router plugin"
     image_uri    = var.wasm_plugin_image_uri
-    plugin_config_data = jsonencode({
+    plugin_config_data = base64encode(jsonencode({
       total_cells   = length(local.cells)
-      shard_size    = 3
+      shard_size    = local.effective_shard_size
       hash_salt     = "gcp-cell-v1-prod"
       drained_cells = []
-    })
+    }))
   }
 }
 
-resource "google_network_services_lb_traffic_extension" "cell_shuffle_extension" {
+# LbEdgeExtension executes BEFORE URL map evaluation on Global External ALBs so the
+# x-cell-id header injected by Proxy-Wasm steers each request to its isolated cell backend.
+resource "google_network_services_lb_edge_extension" "cell_shuffle_extension" {
   provider              = google-beta
   count                 = var.ingress_mode == "global" ? 1 : 0
   project               = var.platform_project_id
-  name                  = "cell-shuffle-traffic-ext"
+  name                  = "cell-shuffle-edge-ext"
+  description           = "Pre-routing edge extension stamping x-cell-id per tenant virtual shard"
   location              = "global"
   load_balancing_scheme = "EXTERNAL_MANAGED"
   forwarding_rules      = [google_compute_global_forwarding_rule.cell_anycast_fr[0].self_link]
@@ -190,9 +200,9 @@ resource "google_network_services_lb_traffic_extension" "cell_shuffle_extension"
       cel_expression = "true"
     }
     extensions {
-      name      = "shuffle-wasm"
-      service   = google_network_services_wasm_plugin.shuffle_router[0].id
-      fail_open = false
+      name             = "shuffle-wasm"
+      service          = google_network_services_wasm_plugin.shuffle_router[0].id
+      fail_open        = false
       supported_events = ["REQUEST_HEADERS"]
     }
   }

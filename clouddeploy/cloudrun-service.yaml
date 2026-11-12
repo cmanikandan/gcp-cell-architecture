@@ -1,0 +1,31 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: cell-00-api # from-param: ${service_name}
+  annotations:
+    run.googleapis.com/ingress: internal-and-cloud-load-balancing
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "50"
+    spec:
+      serviceAccountName: cell-00-workload-sa@example.iam.gserviceaccount.com # from-param: ${workload_service_account}
+      containers:
+        - image: cell-api
+          ports:
+            - containerPort: 8080
+          env:
+            - name: CELL_ID
+              value: cell-00 # from-param: ${cell_id}
+            - name: CELL_REGION
+              value: us-central1 # from-param: ${cell_region}
+            - name: SPANNER_INSTANCE
+              value: cell-00-spanner # from-param: ${spanner_instance}
+            - name: SPANNER_DATABASE
+              value: cell_ledger
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
