@@ -48,6 +48,9 @@ if command -v gcloud >/dev/null 2>&1; then
 fi
 
 echo "==> [2/3] Running Terraform destroy across all cells and shared routing resources..."
+# shellcheck source=tests/ensure_terraform.sh
+source "${ROOT_DIR}/tests/ensure_terraform.sh"
+ensure_terraform
 terraform -chdir="${ROOT_DIR}/terraform" init -input=false
 if [[ -f "${ROOT_DIR}/terraform/poc.auto.tfvars" ]]; then
   terraform -chdir="${ROOT_DIR}/terraform" destroy -auto-approve \

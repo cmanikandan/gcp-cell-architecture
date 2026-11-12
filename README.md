@@ -59,7 +59,7 @@ By default, `terraform/variables.tf` uses POC-friendly sizing (`100` Spanner pro
 ### Prerequisites
 
 * [Google Cloud SDK (`gcloud`)](https://docs.cloud.google.com/sdk/docs/install) authenticated to a sandbox organization/project with billing enabled
-* [Terraform](https://developer.hashicorp.com/terraform/downloads) `>= 1.6` (preinstalled in Google Cloud Shell)
+* [Terraform](https://developer.hashicorp.com/terraform/downloads) `>= 1.6` (automatically installed into `~/.local/bin/terraform` if Google Cloud Shell's stub is detected)
 * *(Optional for local Wasm development only)* [Rust toolchain](https://rustup.rs/) with target `wasm32-wasip1` — **not required** for `--deploy-gcp`, because **Cloud Build** compiles and packages both the Rust Proxy-Wasm plugin (`router-wasm/cloudbuild.yaml`) and the Python cell service remotely
 
 ### One-command POC build & deploy (Cloud Shell or local workstation)

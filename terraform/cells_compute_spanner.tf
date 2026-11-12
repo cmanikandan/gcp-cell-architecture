@@ -97,14 +97,18 @@ resource "google_spanner_database_iam_member" "cell_db_user" {
   member   = "serviceAccount:${google_service_account.cell_workload_sa[each.key].email}"
 }
 
-# Cell-scoped Cloud Run service with Direct VPC Egress into the cell's isolated subnet
+# Cell-scoped Cloud Run service with Direct VPC Egress into the cell's isolated subnet.
+# Uses `invoker_iam_disabled` instead of an `allUsers` IAM binding so External ALB
+# Serverless NEG probes work cleanly under Domain Restricted Sharing org policies
+# while `INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER` blocks direct *.run.app access.
 resource "google_cloud_run_v2_service" "cell_api" {
-  for_each            = var.compute_runtime == "cloud_run" ? local.cells : {}
-  project             = each.value.project_id
-  name                = "${each.key}-api"
-  location            = each.value.region
-  ingress             = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
-  deletion_protection = var.enable_deletion_protection
+  for_each             = var.compute_runtime == "cloud_run" ? local.cells : {}
+  project              = each.value.project_id
+  name                 = "${each.key}-api"
+  location             = each.value.region
+  ingress              = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  invoker_iam_disabled = var.allow_unauthenticated_invoker
+  deletion_protection  = var.enable_deletion_protection
 
   template {
     service_account = google_service_account.cell_workload_sa[each.key].email
@@ -148,17 +152,6 @@ resource "google_cloud_run_v2_service" "cell_api" {
       }
     }
   }
-}
-
-# Allow External ALB Serverless NEG requests to invoke each cell's Cloud Run service in POC mode.
-# Direct *.run.app URLs remain blocked at the network edge by INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER.
-resource "google_cloud_run_v2_service_iam_member" "alb_public_invoker" {
-  for_each = var.compute_runtime == "cloud_run" && var.allow_unauthenticated_invoker ? local.cells : {}
-  project  = each.value.project_id
-  location = each.value.region
-  name     = google_cloud_run_v2_service.cell_api[each.key].name
-  role     = "roles/run.invoker"
-  member   = "allUsers"
 }
 
 # Optional GKE Autopilot cluster per cell when stateful sidecars or custom GPUs are required

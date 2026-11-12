@@ -4,6 +4,7 @@ metadata:
   name: cell-00-api # from-param: ${service_name}
   annotations:
     run.googleapis.com/ingress: internal-and-cloud-load-balancing
+    run.googleapis.com/invoker-iam-disabled: "true"
 spec:
   template:
     metadata:

@@ -37,7 +37,11 @@ SECONDARY_REGION="${SECONDARY_REGION:-us-east4}"
 AR_REPO="${AR_REPO:-cells}"
 POC_CELL_COUNT="${POC_CELL_COUNT:-4}"
 
-echo "==> [0/6] Enabling required Google Cloud APIs & preparing Artifact Registry in ${PLATFORM_PROJECT_ID}..."
+echo "==> [0/6] Enabling required Google Cloud APIs, Terraform CLI & Artifact Registry in ${PLATFORM_PROJECT_ID}..."
+# shellcheck source=tests/ensure_terraform.sh
+source "${ROOT_DIR}/tests/ensure_terraform.sh"
+ensure_terraform
+
 gcloud services enable \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
@@ -87,16 +91,24 @@ gcloud apphub boundary update \
 
 echo "==> [1/6] Building & packaging Proxy-Wasm shuffle-sharding Service Extension in Cloud Build..."
 WASM_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/shuffle-router:v0.1.0"
-gcloud builds submit "${ROOT_DIR}/router-wasm" \
-  --project="${PLATFORM_PROJECT_ID}" \
-  --config="${ROOT_DIR}/router-wasm/cloudbuild.yaml" \
-  --substitutions="_WASM_URI=${WASM_URI}"
+if [[ "${FORCE_REBUILD:-0}" != "1" ]] && gcloud artifacts docker images describe "${WASM_URI}" --quiet >/dev/null 2>&1; then
+  echo "    Reusing existing Wasm image ${WASM_URI} (set FORCE_REBUILD=1 to rebuild)."
+else
+  gcloud builds submit "${ROOT_DIR}/router-wasm" \
+    --project="${PLATFORM_PROJECT_ID}" \
+    --config="${ROOT_DIR}/router-wasm/cloudbuild.yaml" \
+    --substitutions="_WASM_URI=${WASM_URI}"
+fi
 
 echo "==> [2/6] Building cell workload container image..."
 CELL_IMAGE_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/cell-api:v1.4.0"
-gcloud builds submit "${ROOT_DIR}/cell-service" \
-  --project="${PLATFORM_PROJECT_ID}" \
-  --tag="${CELL_IMAGE_URI}"
+if [[ "${FORCE_REBUILD:-0}" != "1" ]] && gcloud artifacts docker images describe "${CELL_IMAGE_URI}" --quiet >/dev/null 2>&1; then
+  echo "    Reusing existing cell image ${CELL_IMAGE_URI} (set FORCE_REBUILD=1 to rebuild)."
+else
+  gcloud builds submit "${ROOT_DIR}/cell-service" \
+    --project="${PLATFORM_PROJECT_ID}" \
+    --tag="${CELL_IMAGE_URI}"
+fi
 
 echo "==> [3/6] Provisioning cellular topology via Terraform (ALB, Cloud WAN, Cloud Run, Spanner, Cloud Deploy, App Hub)..."
 EXISTING_NON_CELL_VPCS="$(

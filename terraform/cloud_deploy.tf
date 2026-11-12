@@ -17,7 +17,7 @@ locals {
     "roles/storage.admin",
   ]
   runner_cell_project_roles = [
-    "roles/run.developer",
+    "roles/run.admin",
     "roles/iam.serviceAccountUser",
   ]
   runner_cell_role_bindings = {
