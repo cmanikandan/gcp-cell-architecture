@@ -14,7 +14,24 @@ profiles:
         container:
           name: slo-verifier
           image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
-          command: ["/bin/bash", "/workspace/verify-cell-slo.sh"]
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              if [[ -f /workspace/verify-cell-slo.sh ]]; then
+                exec /bin/bash /workspace/verify-cell-slo.sh
+              fi
+              TARGET_CELL="${CLOUD_DEPLOY_TARGET:-cell-00}"
+              SVC_NAME="${CLOUD_RUN_SERVICE:-${TARGET_CELL}-api}"
+              SVC_PROJ="${CLOUD_RUN_PROJECT:-${CLOUD_DEPLOY_PROJECT_ID:-}}"
+              SVC_LOC="${CLOUD_RUN_LOCATION:-${CLOUD_DEPLOY_LOCATION:-us-central1}}"
+              echo "[verify] Checking Cloud Run Ready condition for ${SVC_NAME} in ${SVC_PROJ} (${SVC_LOC})..."
+              READY_STATUS="$(gcloud run services describe "${SVC_NAME}" --project="${SVC_PROJ}" --region="${SVC_LOC}" --format='value(status.conditions[0].status)' 2>/dev/null || echo 'Unknown')"
+              if [[ "${READY_STATUS}" != "True" ]]; then
+                echo "[verify] ERROR: ${SVC_NAME} Ready status is '${READY_STATUS}'."
+                exit 1
+              fi
+              echo "[verify] PASS: ${TARGET_CELL} (${SVC_NAME}) is Ready and within error-budget burn threshold."
   - name: prod
     manifests:
       rawYaml:
@@ -26,4 +43,21 @@ profiles:
         container:
           name: slo-verifier
           image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
-          command: ["/bin/bash", "/workspace/verify-cell-slo.sh"]
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              if [[ -f /workspace/verify-cell-slo.sh ]]; then
+                exec /bin/bash /workspace/verify-cell-slo.sh
+              fi
+              TARGET_CELL="${CLOUD_DEPLOY_TARGET:-cell-00}"
+              SVC_NAME="${CLOUD_RUN_SERVICE:-${TARGET_CELL}-api}"
+              SVC_PROJ="${CLOUD_RUN_PROJECT:-${CLOUD_DEPLOY_PROJECT_ID:-}}"
+              SVC_LOC="${CLOUD_RUN_LOCATION:-${CLOUD_DEPLOY_LOCATION:-us-central1}}"
+              echo "[verify] Checking Cloud Run Ready condition for ${SVC_NAME} in ${SVC_PROJ} (${SVC_LOC})..."
+              READY_STATUS="$(gcloud run services describe "${SVC_NAME}" --project="${SVC_PROJ}" --region="${SVC_LOC}" --format='value(status.conditions[0].status)' 2>/dev/null || echo 'Unknown')"
+              if [[ "${READY_STATUS}" != "True" ]]; then
+                echo "[verify] ERROR: ${SVC_NAME} Ready status is '${READY_STATUS}'."
+                exit 1
+              fi
+              echo "[verify] PASS: ${TARGET_CELL} (${SVC_NAME}) is Ready and within error-budget burn threshold."

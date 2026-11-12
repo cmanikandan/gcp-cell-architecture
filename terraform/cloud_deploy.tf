@@ -13,6 +13,7 @@ locals {
     "roles/clouddeploy.jobRunner",
     "roles/clouddeploy.operator",
     "roles/logging.logWriter",
+    "roles/monitoring.viewer",
     "roles/storage.admin",
   ]
   runner_cell_project_roles = [

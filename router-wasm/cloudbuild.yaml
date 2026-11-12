@@ -1,0 +1,33 @@
+# Compiles the Rust Proxy-Wasm shuffle-sharding router to wasm32-wasip1 and pushes
+# a Service Extensions compatible `--platform wasm` OCI image to Artifact Registry.
+steps:
+  - id: 'compile-proxy-wasm'
+    name: 'rust:1-bookworm'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -euo pipefail
+        rustup target add wasm32-wasip1
+        cargo build --target wasm32-wasip1 --release
+        mkdir -p package
+        cp -f target/wasm32-wasip1/release/cell_shuffle_router_wasm.wasm package/plugin.wasm
+        printf 'FROM scratch\nCOPY plugin.wasm plugin.wasm\n' > package/Dockerfile
+
+  - id: 'build-wasm-image'
+    name: 'gcr.io/cloud-builders/docker'
+    dir: 'package'
+    args:
+      - 'build'
+      - '--no-cache'
+      - '--platform'
+      - 'wasm'
+      - '-t'
+      - '${_WASM_URI}'
+      - '.'
+
+  - id: 'push-wasm-image'
+    name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_WASM_URI}'

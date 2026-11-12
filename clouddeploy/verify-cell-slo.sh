@@ -6,8 +6,9 @@ set -euo pipefail
 
 TARGET_CELL="${CLOUD_DEPLOY_TARGET:-cell-00}"
 ROUTER_URL="${CELL_ROUTER_URL:-}"
-PROJECT_ID="${CLOUD_DEPLOY_PROJECT:-saas-platform-prod}"
-CELL_REGION_VAL="${CELL_REGION:-${CLOUD_DEPLOY_LOCATION:-us-central1}}"
+PROJECT_ID="${CLOUD_RUN_PROJECT:-${CLOUD_DEPLOY_PROJECT_ID:-${CLOUD_DEPLOY_PROJECT:-saas-platform-prod}}}"
+CELL_REGION_VAL="${CLOUD_RUN_LOCATION:-${CELL_REGION:-${CLOUD_DEPLOY_LOCATION:-us-central1}}}"
+SERVICE_NAME_VAL="${CLOUD_RUN_SERVICE:-${TARGET_CELL}-api}"
 
 if [[ -n "${ROUTER_URL}" ]]; then
   echo "[verify] Probing synthetic canary tenant routed to ${TARGET_CELL} via ${ROUTER_URL}..."
@@ -22,13 +23,13 @@ if [[ -n "${ROUTER_URL}" ]]; then
     fi
   done
 elif command -v gcloud >/dev/null 2>&1; then
-  echo "[verify] Checking Cloud Run Ready condition for ${TARGET_CELL}-api in ${PROJECT_ID} (${CELL_REGION_VAL})..."
-  READY_STATUS=$(gcloud run services describe "${TARGET_CELL}-api" \
+  echo "[verify] Checking Cloud Run Ready condition for ${SERVICE_NAME_VAL} in ${PROJECT_ID} (${CELL_REGION_VAL})..."
+  READY_STATUS=$(gcloud run services describe "${SERVICE_NAME_VAL}" \
     --project="${PROJECT_ID}" \
     --region="${CELL_REGION_VAL}" \
     --format="value(status.conditions[0].status)" 2>/dev/null || echo "Unknown")
   if [[ "${READY_STATUS}" != "True" ]]; then
-    echo "[verify] ERROR: Cloud Run service ${TARGET_CELL}-api Ready status is '${READY_STATUS}'."
+    echo "[verify] ERROR: Cloud Run service ${SERVICE_NAME_VAL} Ready status is '${READY_STATUS}'."
     exit 1
   fi
 fi

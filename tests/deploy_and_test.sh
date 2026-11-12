@@ -53,6 +53,7 @@ gcloud services enable \
   logging.googleapis.com \
   iam.googleapis.com \
   --project="${PLATFORM_PROJECT_ID}"
+gcloud services enable networkactions.googleapis.com --project="${PLATFORM_PROJECT_ID}" >/dev/null 2>&1 || true
 
 if ! gcloud artifacts repositories describe "${AR_REPO}" \
   --project="${PLATFORM_PROJECT_ID}" \
@@ -84,43 +85,12 @@ gcloud apphub boundary update \
   --location=global \
   --quiet >/dev/null 2>&1 || true
 
-echo "==> [1/6] Building Proxy-Wasm shuffle-sharding Service Extension..."
-if command -v rustup >/dev/null 2>&1; then
-  if ! rustup show active-toolchain >/dev/null 2>&1; then
-    echo "    No default Rust toolchain configured in Cloud Shell; running 'rustup default stable'..."
-    rustup default stable
-  fi
-  rustup target add wasm32-wasip1
-elif ! command -v cargo >/dev/null 2>&1; then
-  echo "    Installing Rust stable toolchain via rustup..."
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-  # shellcheck disable=SC1091
-  source "${HOME}/.cargo/env"
-  rustup target add wasm32-wasip1
-fi
-
+echo "==> [1/6] Building & packaging Proxy-Wasm shuffle-sharding Service Extension in Cloud Build..."
 WASM_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/shuffle-router:v0.1.0"
-(
-  cd "${ROOT_DIR}/router-wasm"
-  cargo build --target wasm32-wasip1 --release
-  mkdir -p package
-  cp target/wasm32-wasip1/release/cell_shuffle_router_wasm.wasm package/plugin.wasm
-  cat > package/Dockerfile <<'EOF'
-FROM scratch
-COPY plugin.wasm plugin.wasm
-EOF
-  cat > package/cloudbuild.yaml <<EOF
-steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '--no-cache', '--platform', 'wasm', '-t', '${WASM_URI}', '.']
-images:
-  - '${WASM_URI}'
-EOF
-)
-
-gcloud builds submit "${ROOT_DIR}/router-wasm/package" \
+gcloud builds submit "${ROOT_DIR}/router-wasm" \
   --project="${PLATFORM_PROJECT_ID}" \
-  --config="${ROOT_DIR}/router-wasm/package/cloudbuild.yaml"
+  --config="${ROOT_DIR}/router-wasm/cloudbuild.yaml" \
+  --substitutions="_WASM_URI=${WASM_URI}"
 
 echo "==> [2/6] Building cell workload container image..."
 CELL_IMAGE_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/cell-api:v1.4.0"

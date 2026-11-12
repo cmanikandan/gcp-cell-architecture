@@ -59,8 +59,8 @@ By default, `terraform/variables.tf` uses POC-friendly sizing (`100` Spanner pro
 ### Prerequisites
 
 * [Google Cloud SDK (`gcloud`)](https://docs.cloud.google.com/sdk/docs/install) authenticated to a sandbox organization/project with billing enabled
-* [Terraform](https://developer.hashicorp.com/terraform/downloads) `>= 1.6`
-* [Rust toolchain](https://rustup.rs/) with target `wasm32-wasip1` (`rustup target add wasm32-wasip1`) for compiling the Proxy-Wasm router
+* [Terraform](https://developer.hashicorp.com/terraform/downloads) `>= 1.6` (preinstalled in Google Cloud Shell)
+* *(Optional for local Wasm development only)* [Rust toolchain](https://rustup.rs/) with target `wasm32-wasip1` — **not required** for `--deploy-gcp`, because **Cloud Build** compiles and packages both the Rust Proxy-Wasm plugin (`router-wasm/cloudbuild.yaml`) and the Python cell service remotely
 
 ### One-command POC build & deploy (Cloud Shell or local workstation)
 
@@ -71,7 +71,7 @@ export PRIMARY_REGION="us-central1"
 ./tests/deploy_and_test.sh --deploy-gcp
 ```
 
-> **Single-project Cloud Shell mode vs. multi-project fleet:** When `cell_project_ids` is omitted, `--deploy-gcp` automatically enables required APIs, configures `rustup` (`stable` + `wasm32-wasip1`), and deploys **4 isolated cells** (`POC_CELL_COUNT=4`, ~`\$0.80/hr`) into `PLATFORM_PROJECT_ID` so 4 cell VPCs + `default` VPC fit cleanly inside Google Cloud's default 5-VPC per-project quota. To deploy the full **8-cell** multi-project topology (~`\$1.60/hr`), pass `cell_project_ids` in Terraform or set `POC_CELL_COUNT=8`.
+> **Single-project Cloud Shell mode vs. multi-project fleet:** When `cell_project_ids` is omitted, `--deploy-gcp` automatically enables required APIs, compiles the `wasm32-wasip1` Service Extension remotely in Cloud Build, and deploys **4 isolated cells** (`POC_CELL_COUNT=4`, ~`\$0.80/hr`) into `PLATFORM_PROJECT_ID` so 4 cell VPCs + `default` VPC fit cleanly inside Google Cloud's default 5-VPC per-project quota. To deploy the full **8-cell** multi-project topology (~`\$1.60/hr`), pass `cell_project_ids` in Terraform or set `POC_CELL_COUNT=8`.
 
 To switch between a **global Anycast external Application Load Balancer** (default) and **sovereign regional external Application Load Balancers** (for strict data residency), set `ingress_mode = "regional"` in `terraform/variables.tf` or pass `-var="ingress_mode=regional"`.
 
