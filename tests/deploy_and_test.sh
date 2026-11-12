@@ -101,7 +101,7 @@ else
 fi
 
 echo "==> [2/6] Building cell workload container image..."
-CELL_IMAGE_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/cell-api:v1.4.0"
+CELL_IMAGE_URI="${REGION}-docker.pkg.dev/${PLATFORM_PROJECT_ID}/${AR_REPO}/cell-api:v1.4.1"
 if [[ "${FORCE_REBUILD:-0}" != "1" ]] && gcloud artifacts docker images describe "${CELL_IMAGE_URI}" --quiet >/dev/null 2>&1; then
   echo "    Reusing existing cell image ${CELL_IMAGE_URI} (set FORCE_REBUILD=1 to rebuild)."
 else
@@ -149,18 +149,21 @@ ALB_VIP="$(terraform -chdir="${ROOT_DIR}/terraform" output -raw anycast_cell_rou
 echo "==> [5/6] Waiting for Global External ALB Anycast VIP (${ALB_VIP}) edge propagation..."
 READY=0
 for attempt in {1..24}; do
-  HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H 'X-Tenant-Id: warmup-probe' "http://${ALB_VIP}/healthz" || echo '000')"
+  HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H 'X-Tenant-Id: warmup-probe' "http://${ALB_VIP}/healthz" || true)"
   if [[ "${HTTP_CODE}" == "200" ]]; then
     echo "    Anycast VIP ${ALB_VIP} is live (HTTP 200 on attempt ${attempt}/24)!"
     READY=1
     break
   fi
-  echo "    [attempt ${attempt}/24] GFE edge programming in progress (HTTP ${HTTP_CODE}); retrying in 10s..."
+  echo "    [attempt ${attempt}/24] GFE edge programming in progress (HTTP ${HTTP_CODE:-000}); retrying in 10s..."
   sleep 10
 done
 
 echo "==> [6/6] Probing Anycast Cell Router VIP (${ALB_VIP}) across sample tenants..."
 if [[ "${READY}" -eq 1 ]]; then
+  for tid in alice-corp bob-retail charlie-bank delta-health; do
+    curl -s -o /dev/null --max-time 15 -H "X-Tenant-Id: ${tid}" "http://${ALB_VIP}/healthz" || true
+  done
   python3 "${ROOT_DIR}/tests/live_chaos_test.py" --target-url "http://${ALB_VIP}"
 else
   echo "    Note: Global ALB edge propagation can occasionally take 3-5 minutes on brand-new VIPs."

@@ -129,6 +129,10 @@ resource "google_cloud_run_v2_service" "cell_api" {
     containers {
       image = var.cell_container_image
       env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = each.value.project_id
+      }
+      env {
         name  = "CELL_ID"
         value = each.key
       }

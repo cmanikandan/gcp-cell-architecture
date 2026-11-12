@@ -18,6 +18,8 @@ spec:
           ports:
             - containerPort: 8080
           env:
+            - name: GOOGLE_CLOUD_PROJECT
+              value: saas-platform-prod # from-param: ${cell_project_id}
             - name: CELL_ID
               value: cell-00 # from-param: ${cell_id}
             - name: CELL_REGION

@@ -77,6 +77,7 @@ class LocalCellRouterProxy(BaseHTTPRequestHandler):
             url = f"http://127.0.0.1:{port}{self.path}"
             req = urllib.request.Request(
                 url,
+                data=b"" if method == "POST" else None,
                 method=method,
                 headers={
                     "X-Tenant-Id": tenant_id,
@@ -123,12 +124,12 @@ def _wait_http_ok(url: str, timeout_s: float = 8.0) -> None:
 
 
 def _send_tenant_req(router_url: str, tenant_id: str, poison: bool = False) -> tuple[int, dict]:
-    headers = {"X-Tenant-Id": tenant_id}
+    headers = {"Content-Type": "application/json", "X-Tenant-Id": tenant_id}
     if poison:
         headers["X-Poison-Payload"] = "crash"
-    req = urllib.request.Request(f"{router_url}/v1/infer", method="POST", headers=headers)
+    req = urllib.request.Request(f"{router_url}/v1/infer", data=b"{}", method="POST", headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=10.0) as resp:
+        with urllib.request.urlopen(req, timeout=15.0) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
             try:
                 return resp.status, json.loads(raw)
