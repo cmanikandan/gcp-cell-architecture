@@ -24,7 +24,7 @@ A **cell-based architecture** applies that exact idea to cloud applications. Ins
 * **Built-in ceiling on outages:** With 8 equal cells, even if an entire cell goes dark, at least **87.5% of your fleet** keeps running normally.
 * **Easy scaling:** When your business grows, you don't have to re-architect a giant cluster—you simply stamp out `cell-09` using Terraform.
 
-![Cell-based reference architecture on Google Cloud](upload://01_cell_reference_architecture.png)
+![Cell-based reference architecture on Google Cloud](https://raw.githubusercontent.com/cmanikandan/gcp-cell-architecture/main/diagrams/01_cell_reference_architecture.png)
 *Figure 1. End-to-end cell-based architecture on Google Cloud with a thin routing layer, isolated per-project cells, and unified visibility in App Hub and Cloud Hub.*
 
 ### How shuffle sharding stops noisy neighbors like a deck of cards
@@ -49,7 +49,7 @@ Out of 8 cells, there are **56 possible 3-cell hands**. Even if Tenant X crashes
 | **3-card shuffle sharding** | **8** | **3** | **56** | **1.8% (`<2%` goal met!)** |
 | **2-card shuffle on 12 cells** | **12** | **2** | **66** | **1.5% (`<2%` goal met!)** |
 
-![Standard cell sharding compared with shuffle sharding on Google Cloud](upload://02_shuffle_sharding_combinatorics.png)
+![Standard cell sharding compared with shuffle sharding on Google Cloud](https://raw.githubusercontent.com/cmanikandan/gcp-cell-architecture/main/diagrams/02_shuffle_sharding_combinatorics.png)
 *Figure 2. Comparing normal 1-cell assignment (12.5% impact) with shuffle sharding (<2% impact across the same 8 cells).*
 
 > **Beginner tip — What about databases?** Shuffle sharding is effortless for stateless APIs, web tiers, and AI inference services on `Cloud Run` or `GKE`, because any cell in a customer's hand can process the request right away. For your `Spanner` database tier, start simple: keep each customer's primary data in their first cell (`cell-02`), or replicate asynchronously to their backup cell (`cell-04`) using Spanner change streams if you need instant database failover too.
@@ -67,7 +67,7 @@ Every cellular architecture needs a thin "front door" that checks who the custom
 * **Option A — Global external Application Load Balancer (best for most SaaS and AI APIs):** Gives you a single global Anycast IP address protected by Cloud Armor. If `cell-02` becomes unhealthy, the load balancer shifts traffic to a healthy backup cell in under 5 seconds—even in another region—without waiting for DNS caches to expire. Just remember to validate changes to your shared URL map in CI before deploying.
 * **Option B — Regional external Application Load Balancers (best for strict data residency):** Keeps the load balancer proxies, URL maps, Cloud Armor policies, and Spanner databases 100% locked inside a single jurisdiction (such as `us-central1` for US customers and `europe-west1` for EU customers), using Cloud DNS geolocation policies at the top.
 
-![Comparing global Anycast and regional external Application Load Balancers for cell routing](upload://03_global_vs_regional_alb_ingress.png)
+![Comparing global Anycast and regional external Application Load Balancers for cell routing](https://raw.githubusercontent.com/cmanikandan/gcp-cell-architecture/main/diagrams/03_global_vs_regional_alb_ingress.png)
 *Figure 3. Choosing between a global external Application Load Balancer (Option A) and sovereign regional external Application Load Balancers (Option B).*
 
 ### Step 2: route requests at the edge with Service Extensions and Cloud WAN
@@ -91,6 +91,9 @@ def get_customer_cell_hand(tenant_id: str, total_cells: int = 8, hand_size: int 
 # Always returns the exact same 3-cell hand for Alice, anywhere in the world:
 print(get_customer_cell_hand("alice"))  # -> ['cell-02', 'cell-04', 'cell-07']
 ```
+
+![Live Anycast Application Load Balancer and Rust Proxy-Wasm routing diagram](https://raw.githubusercontent.com/cmanikandan/gcp-cell-architecture/main/diagrams/06_live_anycast_wasm_routing_diagram.png)
+*Figure 4. Live traffic view from the deployed Google Cloud POC showing `alice-corp` (`Dealt Hand: cell-02 → cell-03`) routed through Cloud Armor and the Rust Proxy-Wasm Service Extension (`Stamps x-cell-id: cell-02`) to primary `cell-02` (`us-central1`) while backup `cell-03` (`us-east4`) stands by.*
 
 What if your enterprise customers connect privately from corporate offices over VPN or Cloud Interconnect instead of the public internet? Use **Cloud WAN** with **Network Connectivity Center (NCC)** configured in a **`STAR` topology**:
 
@@ -146,8 +149,8 @@ With **Cloud Deploy**, you promote releases in **progressive waves** so a bad bu
 
 Finally, managing 8 separate Google Cloud projects doesn't mean clicking around 8 browser tabs during an alert. Register each cell in **App Hub** (`saas-cell-00` .. `saas-cell-07`), and **Cloud Hub** gives your team a single dashboard showing active deployments, quota usage, and SLO alerts broken down cleanly by cell.
 
-![Progressive wave-by-wave rollout across cells in Cloud Deploy](upload://04_cloud_deploy_wave_pipeline.png)
-*Figure 4. Progressive wave delivery in Cloud Deploy with automated SLO checks, auto-rollback, and unified visibility in App Hub and Cloud Hub.*
+![Progressive wave-by-wave rollout across cells in Cloud Deploy](https://raw.githubusercontent.com/cmanikandan/gcp-cell-architecture/main/diagrams/04_cloud_deploy_wave_pipeline.png)
+*Figure 5. Progressive wave delivery in Cloud Deploy with automated SLO checks, auto-rollback, and unified visibility in App Hub and Cloud Hub.*
 
 [details="Click to view the Cloud Deploy wave pipeline (Terraform)"]
 ```hcl
@@ -184,9 +187,9 @@ resource "google_clouddeploy_delivery_pipeline" "cellular_pipeline" {
 
 ### Step 5: test the proof of concept locally or on Google Cloud
 
-> **Proof-of-concept (POC) & billing notice:** The companion repository ([cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture)) is an educational **proof of concept (POC)** intended for learning and architectural evaluation—not a turn-key production deployment. Running the local simulation (`--local-only`) is **100% free (\$0)**, whereas deploying to Google Cloud (`--deploy-gcp`) creates live resources and **will incur cloud billing charges**. Because cloud pricing, free-tier quotas, and service features change over time, always refer to the [official Google Cloud documentation](https://docs.cloud.google.com/) and the [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator) for the latest information before deploying.
+> **Proof-of-concept (POC) & billing notice:** The companion repository ([cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture)) is an educational **proof of concept (POC)** intended for learning and architectural evaluation—not a turn-key production deployment. Running the local simulation (`--local-only`) is **100% free ($0)**, whereas deploying to Google Cloud (`--deploy-gcp`) creates live resources and **will incur cloud billing charges**. Because cloud pricing, free-tier quotas, and service features change over time, always refer to the [official Google Cloud documentation](https://docs.cloud.google.com/) and the [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator) for the latest information before deploying.
 
-You don't need a live cloud account to see shuffle sharding in action. Clone the [cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture) repository on GitHub—its local test harness (`deploy_and_test.sh --local-only`) spins up 8 mini cell servers on your laptop at **\$0 cost**, runs a local shuffle-sharding load balancer, crashes **Tenant X**'s cells, and proves that **Alice** and **98%+ of 1,000 simulated customers** stay online:
+You don't need a live cloud account to see shuffle sharding in action. Clone the [cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture) repository on GitHub—its local test harness (`deploy_and_test.sh --local-only`) spins up 8 mini cell servers on your laptop at **$0 cost**, runs a local shuffle-sharding load balancer, crashes **Tenant X**'s cells, and proves that **Alice** and **98%+ of 1,000 simulated customers** stay online:
 
 ```bash
 git clone https://github.com/cmanikandan/gcp-cell-architecture.git
@@ -222,16 +225,16 @@ Step 4/4: Sending alice-3's next request through the load balancer...
 
 #### Approximate cost of running the POC on Google Cloud
 
-If you deploy the full **8-cell** multi-project POC (`us-central1` / `us-east4`), the Terraform variables default to minimal POC sizing (`100` Spanner processing units on `STANDARD` edition per cell and scale-to-zero Cloud Run with `min_instance_count = 0`). Expect **~\$3 to \$5 USD total for a 2-hour hands-on test session**—or **~\$1.60/hour (~\$1,165/month)** if left running (in **single-project Cloud Shell mode**, `--deploy-gcp` defaults to **4 cells** at roughly half this rate—**~\$0.80/hour**—to fit Google Cloud's default 5-VPC per-project quota):
+If you deploy the full **8-cell** multi-project POC (`us-central1` / `us-east4`), the Terraform variables default to minimal POC sizing (`100` Spanner processing units on `STANDARD` edition per cell and scale-to-zero Cloud Run with `min_instance_count = 0`). Expect **~$3 to $5 USD total for a 2-hour hands-on test session**—or **~$1.60/hour (~$1,165/month)** if left running (in **single-project Cloud Shell mode**, `--deploy-gcp` defaults to **4 cells** at roughly half this rate—**~$0.80/hour**—to fit Google Cloud's default 5-VPC per-project quota):
 
 | Google Cloud service | 8-cell POC configuration | Approx. hourly rate | 2-hour POC test | 24/7 monthly rate | Official pricing reference |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **Spanner** | `8` regional `STANDARD` instances × `100` PU (1-hr minimum) | ~\$0.76/hr | ~\$1.52 | ~\$555/mo | [Spanner pricing](https://cloud.google.com/spanner/pricing) |
-| **Cloud WAN (NCC)** | `8` VPC spokes on `STAR` hub (+ data transfer) | ~\$0.80/hr | ~\$1.60 | ~\$584/mo | [Network Connectivity pricing](https://cloud.google.com/network-connectivity/pricing) |
-| **Cloud Load Balancing & Service Extensions** | `1` global forwarding rule + Proxy-Wasm plugin | ~\$0.025/hr | ~\$0.05 | ~\$18/mo | [Cloud Load Balancing pricing](https://cloud.google.com/load-balancing/pricing) |
-| **Cloud Armor Standard** | `1` security policy + `2` rules (prorated) | ~\$0.01/hr | <\$0.05 | ~\$7/mo | [Cloud Armor pricing](https://cloud.google.com/armor/pricing) |
-| **Cloud Run, Cloud Deploy, Cloud Build & App Hub** | Scale-to-zero (`min_instances = 0`), 1st pipeline, App Hub | ~\$0.00/hr idle | <\$0.25 | Usage-based | [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator) |
-| **Estimated POC total** | **Full 8-cell sandbox deployment** | **~\$1.60/hr** | **~\$3–\$5 total** | **~\$1,165/mo** | *Tear down right after testing!* |
+| **Spanner** | `8` regional `STANDARD` instances × `100` PU (1-hr minimum) | ~$0.76/hr | ~$1.52 | ~$555/mo | [Spanner pricing](https://cloud.google.com/spanner/pricing) |
+| **Cloud WAN (NCC)** | `8` VPC spokes on `STAR` hub (+ data transfer) | ~$0.80/hr | ~$1.60 | ~$584/mo | [Network Connectivity pricing](https://cloud.google.com/network-connectivity/pricing) |
+| **Cloud Load Balancing & Service Extensions** | `1` global forwarding rule + Proxy-Wasm plugin | ~$0.025/hr | ~$0.05 | ~$18/mo | [Cloud Load Balancing pricing](https://cloud.google.com/load-balancing/pricing) |
+| **Cloud Armor Standard** | `1` security policy + `2` rules (prorated) | ~$0.01/hr | <$0.05 | ~$7/mo | [Cloud Armor pricing](https://cloud.google.com/armor/pricing) |
+| **Cloud Run, Cloud Deploy, Cloud Build & App Hub** | Scale-to-zero (`min_instances = 0`), 1st pipeline, App Hub | ~$0.00/hr idle | <$0.25 | Usage-based | [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator) |
+| **Estimated POC total** | **Full 8-cell sandbox deployment** | **~$1.60/hr** | **~$3–$5 total** | **~$1,165/mo** | *Tear down right after testing!* |
 
 *Note: All figures above are approximate US list-price estimates excluding network egress and free-tier credits. Always verify current rates in the official Google Cloud pricing pages linked above.*
 
@@ -256,6 +259,15 @@ Once `--deploy-gcp` finishes and prints `Anycast Cell Router URL : http://<ANYCA
 * **Live-synced routing topology:** Watch real HTTP requests flow from your browser through the global external Application Load Balancer and Proxy-Wasm `LbEdgeExtension` into isolated Cloud Run and Spanner cells—automatically re-probing whenever a cell crashes or heals so blocked (`503`) and backup failover (`Retry #1 → 200 OK`) paths always match live cell health.
 * **Browser-triggered chaos tests & 24-customer blast matrix:** Click any cell to inject a Spanner-backed poison-pill crash across all Cloud Run instances in that cell (auto-heals after 180 seconds), run the **4-step guided failover demo**, or click any tile in the **24-customer blast matrix** to trace its live failover path and Spanner ledger reads.
 * **Built-in project ID obfuscation:** Following public-endpoint security best practices, every HTML view and JSON API response masks `GOOGLE_CLOUD_PROJECT` server-side to only its first three characters (for example, `abc************`) so full project identifiers are never exposed to external clients.
+
+![Live deployed app overview showing edge metadata, obfuscated GCP project ID, and Box 1 architecture blueprint](https://raw.githubusercontent.com/cmanikandan/gcp-cell-architecture/main/diagrams/05_live_app_overview_and_blueprint.png)
+*Figure 6. Opening the deployed Anycast VIP displays the serving cell (`cell-00`), obfuscated project ID (`maj************`), active shard combinatorics (`4 cells, k=2 → 6 shards`), isolated Spanner database (`cell-00-spanner`), and built-in architecture blueprint tabs.*
+
+![Per-cell chaos controls and live 24-customer shuffle-sharding blast matrix](https://raw.githubusercontent.com/cmanikandan/gcp-cell-architecture/main/diagrams/07_live_chaos_controls_and_blast_matrix.png)
+*Figure 7. Boxes 3 and 4 provide one-click per-cell crash/heal controls across `us-central1` and `us-east4` alongside a live 24-customer blast-radius matrix (`24/24 (100.0%) Customers Online`).*
+
+![Live Edge and Spanner request log proving automatic cross-region failover](https://raw.githubusercontent.com/cmanikandan/gcp-cell-architecture/main/diagrams/08_live_cross_region_spanner_failover_log.png)
+*Figure 8. Box 5 captures a live poison-pill crash on `cell-02 (us-central1)` (`503 POISON_PILL_TRIGGERED` → `503 CELL_UNAVAILABLE` on `Attempt #0`) followed immediately by automatic cross-region failover to backup `cell-03 (us-east4)` (`200 OK (Failover #1)`) with a verified Spanner commit timestamp (`spanner:cell-03-spanner:...`).*
 
 ---
 
@@ -285,7 +297,7 @@ Ready to try it out for your own workloads?
 3. **Model your first cells:** Group your services into cell boundaries in [App Hub](https://docs.cloud.google.com/app-hub/docs/overview) and monitor per-cell health and rollouts in [Cloud Hub](https://docs.cloud.google.com/hub/docs/overview).
 4. **Share your thoughts in the comments:** Have you dealt with noisy-neighbor outages in multi-tenant apps, or are you weighing global vs. regional load balancers for your cells? Drop your questions or experiences below!
 
-### Helpful links and community formatting resources
+### Helpful links and documentation
 
 * Companion POC code, chaos tests & uninstall script on GitHub: [cmanikandan/gcp-cell-architecture](https://github.com/cmanikandan/gcp-cell-architecture)
 * [Google Cloud Architecture Framework: Reliability](https://docs.cloud.google.com/architecture/framework/reliability)
@@ -294,5 +306,3 @@ Ready to try it out for your own workloads?
 * [Cloud WAN and Network Connectivity Center overview](https://cloud.google.com/blog/products/networking/connect-globally-with-cloud-wan-for-the-ai-era)
 * [Cloud Deploy deployment strategies](https://docs.cloud.google.com/deploy/docs/overview)
 * [App Hub](https://docs.cloud.google.com/app-hub/docs/overview) and [Cloud Hub](https://docs.cloud.google.com/hub/docs/overview) documentation
-* [Tips and Tricks to Make the Most of the Google Developer Program forums](https://discuss.google.dev/t/tips-and-tricks-to-make-the-most-of-the-google-developer-program-forums/154)
-* Reference Googler Article layout: [Evaluating success in a multi-agent system: Why trajectory assessment and handoffs matters](https://discuss.google.dev/t/evaluating-success-in-a-multi-agent-system-why-trajectory-assessment-and-handoffs-matters/193308)

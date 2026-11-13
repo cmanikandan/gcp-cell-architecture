@@ -82,6 +82,12 @@ Once `--deploy-gcp` prints `Anycast Cell Router URL : http://<ANYCAST_VIP>`, ope
 * **Browser-triggered chaos controls & 24-customer blast matrix (Boxes 3–5):** Crash or heal individual cells (Spanner-backed with 180s auto-heal), run the **4-step Guided Failover Demo**, click any of 24 live customer tiles to trace its hand, and inspect raw HTTP retries and Spanner timestamps in the live request log.
 * **Server-side project ID obfuscation:** All HTML and JSON endpoints mask `GOOGLE_CLOUD_PROJECT` server-side to only its first 3 characters (`abc************`) so full project IDs are never exposed to external clients.
 
+![Live Anycast Application Load Balancer and Rust Proxy-Wasm routing view](diagrams/06_live_anycast_wasm_routing_diagram.png)
+
+![Per-cell chaos controls and 24-customer blast matrix](diagrams/07_live_chaos_controls_and_blast_matrix.png)
+
+![Cross-region Spanner failover audit log](diagrams/08_live_cross_region_spanner_failover_log.png)
+
 To switch between a **global Anycast external Application Load Balancer** (default) and **sovereign regional external Application Load Balancers** (for strict data residency), set `ingress_mode = "regional"` in `terraform/variables.tf` or pass `-var="ingress_mode=regional"`.
 
 ### Uninstall & tear down Google Cloud resources
